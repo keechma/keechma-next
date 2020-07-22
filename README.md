@@ -1,5 +1,7 @@
 # keechma/next
 
+[![Clojars Project](https://img.shields.io/clojars/v/keechma/next.svg)](https://clojars.org/keechma/next)
+
 > That makes me know that, we we we we're doin'<br>
   We had the right idea in the beginning<br>
   And and we just need to maintain our focus, and elevate<br>
