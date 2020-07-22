@@ -13,3 +13,5 @@
 /.shadow-cljs
 /keechma-next.iml
 /public/test/js
+pom.xml
+pom.xml.asc
