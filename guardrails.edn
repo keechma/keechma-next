@@ -1,0 +1,14 @@
+{
+ ; what to emit instead of defn, if you have another defn macro
+ :defn-macro nil
+
+ ;; Nilable map of Expound configuration options.
+ :expound    {:show-valid-values? true
+              :print-specs?       true}
+
+ ;; should an fspec be emitted for functions
+ :emit-spec? true
+
+ ;; should a spec failure on args or ret throw an execption?
+ ;; (always logs an informative message)
+ :throw?     true}
