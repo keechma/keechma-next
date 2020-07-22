@@ -309,7 +309,7 @@ In future, we'll add support for the `:keechma.app/load` function which will all
 
 ### Transactions
 
-Keechma/next's reconciliation is transacted. This means that the any controllers that are dirtied as a result of some state change will be reconciled before next round of reconciliation starts. If any events are dispatched _during_ the reconciliation, and these events cause a state change, controllers dirtied by this state change will be reconciled in the next round (run to completion semantics).
+Keechma/next's reconciliation is transacted. This means that any controllers that are dirtied as a result of some state change will be reconciled before next round of reconciliation starts. If any events are dispatched _during_ the reconciliation, and these events cause a state change, controllers dirtied by this state change will be reconciled in the next round (run to completion semantics).
 
 _* This is not 100% correct because of some exceptions caused by the optimizations in the reconciliation code_
 
