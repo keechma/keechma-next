@@ -42,7 +42,7 @@ Controllers are implemented with multi methods which are dispatched on the contr
 ```clojure
 (ns example.controller
   (:require [keechma.next.core :as core]
-            [keechma.next.controller :as ctrl])
+            [keechma.next.controller :as ctrl]))
 
 (derive :counter :keechma/controller)
 
@@ -59,11 +59,11 @@ Controllers are implemented with multi methods which are dispatched on the contr
 
 (def app-instance (core/start! app))
 
-(core/get-derived-state app)                                ;; {:counter 0}
+(core/get-derived-state app-instance)                                ;; {:counter 0}
 
-(core/dispatch app :counter :inc)
+(core/dispatch app-instance :counter :inc)
 
-(core/get-derived-state app)                                ;; {:counter 1}
+(core/get-derived-state app-instance)                                ;; {:counter 1}
 ```
 
 In this example, we've created a very simple counter controller:
@@ -78,7 +78,7 @@ Let's expand the example. In this case we'll add the `:counter-2` controller who
 ```clojure
 (ns example.controller
   (:require [keechma.next.core :as core]
-            [keechma.next.controller :as ctrl])
+            [keechma.next.controller :as ctrl]))
 
 (derive :counter :keechma/controller)
 
@@ -102,11 +102,11 @@ Let's expand the example. In this case we'll add the `:counter-2` controller who
 
 (def app-instance (core/start! app))
 
-(core/get-derived-state app)                                ;; {:counter 0 :counter-2 0}
+(core/get-derived-state app-instance)                                ;; {:counter 0 :counter-2 0}
 
-(core/dispatch app :counter :inc)
+(core/dispatch app-instance :counter :inc)
 
-(core/get-derived-state app)                                ;; {:counter 1 :counter-2 2}
+(core/get-derived-state app-instance)                                ;; {:counter 1 :counter-2 2}
 ```
 
 In this example, `:counter-2` controller has no internal state. Instead it's state is derived from it's parents' state. `ctrl/derive-state` method allows you to derive the public state based on the controller's internal state and the state of its parents.
@@ -116,7 +116,7 @@ Let's add another controller to the mix:
 ```clojure
 (ns example.controller
   (:require [keechma.next.core :as core]
-            [keechma.next.controller :as ctrl])
+            [keechma.next.controller :as ctrl]))
 
 (derive :counter :keechma/controller)
 
@@ -156,15 +156,15 @@ Let's add another controller to the mix:
 
 (def app-instance (core/start! app))
 
-(core/get-derived-state app)                                ;; {:counter 0 :counter-2 0 :counter-3 0}
+(core/get-derived-state app-instance)                                ;; {:counter 0 :counter-2 0 :counter-3 0}
 
-(core/dispatch app :counter :inc)
+(core/dispatch app-instance :counter :inc)
 
-(core/get-derived-state app)                                ;; {:counter 1 :counter-2 2 :counter-3 3}
+(core/get-derived-state app-instance)                                ;; {:counter 1 :counter-2 2 :counter-3 3}
 
-(core/dispatch app :counter-3 :inc)
+(core/dispatch app-instance :counter-3 :inc)
 
-(core/get-derived-state app)                                ;; {:counter 1 :counter-2 2 :counter-3 4}
+(core/get-derived-state app-instance)                                ;; {:counter 1 :counter-2 2 :counter-3 4}
 ```
 
 In this case `:counter-3` has it's own internal state, and it's using it in combination with its parents' states to derive its public state. 
@@ -180,7 +180,7 @@ In all these examples, controllers' params were set to `true`. Controller's para
 ```clojure
 (ns example.controller
 	(:require [keechma.next.core :as core]
-				[keechma.next.controller :as ctrl])
+				[keechma.next.controller :as ctrl]))
 
 (derive :counter :keechma/controller)
 
