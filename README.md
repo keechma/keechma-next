@@ -78,7 +78,7 @@ Let's expand the example. In this case we'll add the `:counter-2` controller who
 ```clojure
 (ns example.controller
   (:require [keechma.next.core :as core]
-            [keechma.next.controller :as ctrl])
+            [keechma.next.controller :as ctrl]))
 
 (derive :counter :keechma/controller)
 
@@ -116,7 +116,7 @@ Let's add another controller to the mix:
 ```clojure
 (ns example.controller
   (:require [keechma.next.core :as core]
-            [keechma.next.controller :as ctrl])
+            [keechma.next.controller :as ctrl]))
 
 (derive :counter :keechma/controller)
 
@@ -180,7 +180,7 @@ In all these examples, controllers' params were set to `true`. Controller's para
 ```clojure
 (ns example.controller
 	(:require [keechma.next.core :as core]
-				[keechma.next.controller :as ctrl])
+				[keechma.next.controller :as ctrl]))
 
 (derive :counter :keechma/controller)
 
