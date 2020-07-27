@@ -7,7 +7,8 @@
     [keechma.next.conformer :refer [conform conform-factory-produced]]
     [medley.core :refer [dissoc-in]]
     [com.stuartsierra.dependency :as dep]
-    [clojure.set :as set]))
+    [clojure.set :as set]
+    [clojure.string :as str]))
 
 (declare reconcile-from!)
 (declare -dispatch)
@@ -128,9 +129,9 @@
 ;; TODO: validate deps - controllers can't depend on non-existing controller
 ;; TODO: allow deps remapping -> [:foo] or [{:target :source}] e.g. [{:foo :bar}]
 
-(defn prepare-controllers [controllers]
+(defn prepare-controllers [controllers context]
   (->> controllers
-    (map (fn [[k v]] [k (ctrl/prep v)]))
+    (map (fn [[k v]] [k (merge context (ctrl/prep v))]))
     (into {})))
 
 (defn prepare-apps [apps]
@@ -167,18 +168,29 @@
       (deregister-controllers-app-index path controller-names)
       (update-in [:transaction :dirty] set/difference controller-names))))
 
+(defn dissoc-keechma-keys [app]
+  (reduce-kv
+    (fn [m k v]
+      (let [ns             (str (when (keyword? k) (namespace k)))
+            is-keechma-key (or (str/starts-with? ns "keechma.") (= "keechma" ns))]
+        (if is-keechma-key
+          m
+          (assoc m k v))))
+    {}
+    app))
+
 (defn make-ctx
-  [app {:keys [ancestor-controllers apps-context] :as initial-ctx}]
-  (let [apps                (prepare-apps (:keechma/apps app))
-        controllers         (prepare-controllers (:keechma/controllers app))
-        apps-context'       (dissoc app :keechma/controllers :keechma/apps)
+  [app {:keys [ancestor-controllers context] :as initial-ctx}]
+  (let [context'            (merge context (dissoc-keechma-keys app))
+        apps                (prepare-apps (:keechma/apps app))
+        controllers         (prepare-controllers (:keechma/controllers app) context')
         visible-controllers (set/union ancestor-controllers (set (keys controllers)))
         controllers-graph   (build-controllers-graph controllers)]
     (merge
       initial-ctx
       {:keechma/apps         apps
        :controllers          controllers
-       :apps-context         (merge apps-context apps-context')
+       :context              context'
        :ancestor-controllers (or ancestor-controllers #{})
        :visible-controllers  visible-controllers
        :controllers-graph    controllers-graph

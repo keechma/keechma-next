@@ -890,4 +890,63 @@
         app-instance (start! app)]
     (is (= [:keechma.on/start :lifecycle/init :lifecycle/start] (get-derived-state app-instance ::buffered)))))
 
+(derive ::merged-1 :keechma/controller)
+(derive ::merged-2 :keechma/controller)
+
+(defmethod ctrl/start ::merged-1 [_ _ _ _]
+  true)
+
+(defmethod ctrl/handle ::merged-1 [{:keys [log*] :as controller} ev _]
+  (when (= :keechma.on/start ev)
+    (reset! log* (set (keys controller)))))
+
+(defmethod ctrl/handle ::merged-2 [{:keys [log*] :as controller} ev _]
+  (when (= :keechma.on/start ev)
+    (reset! log* (set (keys controller)))))
+
+(deftest merging-configs
+  (let [log-1* (atom nil)
+        log-2* (atom nil)
+        app {:keechma/controllers {::merged-1 {:keechma.controller/params true
+                                               :log* log-1*}}
+             :keechma/apps {:test {:keechma.app/should-run? (fn [_] true)
+                                   :keechma.app/deps [::merged-1]
+                                   :keechma/controllers {::merged-2 {:keechma.controller/params true
+                                                                     :log* log-2*}}
+                                   :test-context true}}
+             :main-context true}
+        app-instance (start! app)]
+    (is (= #{:keechma/is-transacting
+             :keechma.controller/type
+             :keechma.controller/name
+             :keechma.controller/variant
+             :keechma.controller/api
+             :keechma/app
+             :meta-state*
+             :log*
+             :keechma.controller/params
+             :keechma.controller/id
+             :deps-state*
+             :state*
+             :keechma.controller.params/variant
+             :main-context}
+          @log-1*))
+
+    (is (= #{:keechma/is-transacting
+             :keechma.controller/type
+             :keechma.controller/name
+             :keechma.controller/variant
+             :keechma.controller/api
+             :keechma/app
+             :meta-state*
+             :log*
+             :keechma.controller/params
+             :keechma.controller/id
+             :deps-state*
+             :state*
+             :keechma.controller.params/variant
+             :main-context
+             :test-context}
+          @log-2*))
+    (stop! app-instance)))
 ;; TODO: Write test to ensure that child apps are not reconciling parent controllers
