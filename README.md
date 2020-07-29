@@ -200,8 +200,8 @@ In all these examples, controllers' params were set to `true`. Controller's para
 
 (def app
   {:keechma/controllers {:counter   {:keechma.controller/params true}
-                         :counter-2 {:keechma.controller/params (fn [deps] (even? (:counter deps))
-                                                                  :keechma.controller/deps [:counter]}}})
+                         :counter-2 {:keechma.controller/params (fn [deps] (even? (:counter deps)))
+                                     :keechma.controller/deps [:counter]}}})
 
 (def app-instance (core/start! app))
 
