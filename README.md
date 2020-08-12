@@ -205,15 +205,15 @@ In all these examples, controllers' params were set to `true`. Controller's para
 
 (def app-instance (core/start! app))
 
-(core/get-derived-state app)                                ;; {:counter 0 :counter-2 0}
+(core/get-derived-state app-instance)                             ;; {:counter 0 :counter-2 0}
 
-(core/dispatch app :counter :inc)
+(core/dispatch app-instance :counter :inc)
 
-(core/get-derived-state app)                                ;; {:counter 1}
+(core/get-derived-state app-instance)                             ;; {:counter 1}
 
-(core/dispatch app :counter :inc)
+(core/dispatch app-instance :counter :inc)
 
-(core/get-derived-state app)                                ;; {:counter 2 :counter-2 4}
+(core/get-derived-state app-instance)                             ;; {:counter 2 :counter-2 4}
 ```
 
  If you compare the `:counter-2` controller implementation, it is identical to the previous examples. But, in this case we've passed a function as the controller's params. This function will be called whenever any parent state is changed. If that function returns true, controller will be started, otherwise stopped. You can notice that after second `:inc` dispatch, `:counter-2`	key is not present in the derived state map. This is because the controller is not running at that moment (`:counter` value is `1`, so params function returned false). If the params function returned truthy value on previous call, and returns a truthy value again, these values will be compared. If they are different controller will be restarted (stopped and started again). This behavior drastically simplifes your code, because you don't have to handle cases like these in your own code. Params function determines the life time of a controller.
