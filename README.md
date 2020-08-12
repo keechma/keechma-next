@@ -180,7 +180,7 @@ In all these examples, controllers' params were set to `true`. Controller's para
 ```clojure
 (ns example.controller
 	(:require [keechma.next.core :as core]
-				[keechma.next.controller :as ctrl]))
+		  [keechma.next.controller :as ctrl]))
 
 (derive :counter :keechma/controller)
 
