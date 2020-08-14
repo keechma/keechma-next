@@ -233,10 +233,11 @@ In examples so far, we've used only on controller variant - singleton. Singleton
 ```
 {:keechma/controllers
   {:counter-1   {:keechma.controller/params true}
-   [:counter-2] {:keechma.controller.factory/produce (fn [{:keys [counter-1]}]
-                                                       (->> (range counter-1 (+ 2 counter-1))
-                                                            (map (fn [i] [(inc i) {:keechma.controller/params 1}]))
-                                                            (into {})))
+   [:counter-2] {:keechma.controller.factory/produce 
+                    (fn [{:keys [counter-1]}]
+                      (->> (range counter-1 (+ 2 counter-1))
+                           (map (fn [i] [(inc i) {:keechma.controller/params 1}]))
+                           (into {})))
                  :keechma.controller/deps [:counter-1]}}}
 ```
 
