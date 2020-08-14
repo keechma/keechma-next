@@ -230,7 +230,7 @@ In all these examples, controllers' params were set to `true`. Controller's para
 
 In examples so far, we've used only on controller variant - singleton. Singleton controllers are great when you have only one instance of controller running in the system. For instance, you could have a `:router` controller, `:jwt` or `:current-user` controller. Another variant is identity controllers. Identity controllers use a composite key `[:user :some-identity]`. They are useful when you want to mount some controller multiple times in the same app. For all other purposes they are identical to singleton controllers. Last variant is factory controller. Factory controllers are not mounted directly, instead they can dynamically produce configuration for controllers that should be mounted. This is useful when you have to dynamically mount controllers based on some data that is not available in development time. For instance you might have a Kanban board, and you want to mount a controller for each column. All these controllers will be of same type, but each will be its own instance. Factory controllers' configuration looks different from the singleton and identity controllers:
 
-```
+```clojure
 {:keechma/controllers
   {:counter-1   {:keechma.controller/params true}
    [:counter-2] {:keechma.controller.factory/produce 
@@ -294,14 +294,15 @@ As your app grows, there will be features that are local. For instance, you migh
 
 ```clojure
 {:keechma/controllers {:user-role {:keechma.controller/params true }}
- :keechma/apps        {:public    {:keechma/controllers     {:posts {:keechma.controller/params true
-                                                                     :keechma.controller/type   :public-posts}}
-                                   :keechma.app/should-run? (fn [{:keys [user-role]}] (= :guest user-role))
-                                   :keechma.app/deps        [:user-role]}
-                       :user      {:keechma/controllers     {:posts {:keechma.controller/params true
-                                                                     :keechma.controller/type   :user-posts}}
-                                   :keechma.app/should-run? (fn [{:keys [user-role]}] (= :user user-role))
-                                   :keechma.app/deps        [:user-role]}}}
+ :keechma/apps
+ {:public {:keechma.app/should-run? (fn [{:keys [user-role]}] (= :guest user-role))
+           :keechma.app/deps        [:user-role]
+           :keechma/controllers     {:posts {:keechma.controller/params true
+                                             :keechma.controller/type   :public-posts}}}
+  :user   {:keechma.app/should-run? (fn [{:keys [user-role]}] (= :user user-role))
+           :keechma.app/deps        [:user-role]
+           :keechma/controllers     {:posts {:keechma.controller/params true
+                                             :keechma.controller/type   :user-posts}}}}}
 ```
 
 In this example we have three apps defined. The main app - with the `:user-role` controller, the `:public` app with the `:posts` controller and the `:user` app with the `:posts` controller. You've probably noticed that both the `:public` and the `:user` apps have the same - `:posts` controller defined. Also, each of these controllers explicitly sets the `:keechma.controller/type` attribute - controllers are registered on the same key, but have a different type. This is possible because these apps are not able to run at the same time (their `:keechma.app/should-run?` function prevents this). Keechma/next's reconciliation is synchronous so these apps will be started / stopped in the same cycle - UI will only notice the _data_ change. This enables simpler controllers, where they can only implement feature set that makes sense for them. UI can stay dumb, and you don't have to have any conditional logic in the UI as long as the controllers react to same events. For instance, upvote event could cause the `:users` `:posts` controller to send the upvote request to the server, while `:public` `:users` controller could redirect the user to the registration page.
