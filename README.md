@@ -92,7 +92,7 @@ Let's expand the example. In this case we'll add the `:counter-2` controller who
 
 (derive :counter-2 :keechma/controller)
 
-(defmethod ctrl/derive-state :counter-2 [_ _ {:keys [counter]]
+(defmethod ctrl/derive-state :counter-2 [_ _ {:keys [counter]}]
   (* 2 counter))
 
 (def app
@@ -130,7 +130,7 @@ Let's add another controller to the mix:
 
 (derive :counter-2 :keechma/controller)
 
-(defmethod ctrl/derive-state :counter-2 [_ _ {:keys [counter]]
+(defmethod ctrl/derive-state :counter-2 [_ _ {:keys [counter]}]
   (* 2 counter))
 
 
@@ -144,7 +144,7 @@ Let's add another controller to the mix:
     :inc (swap! state* inc)
     nil))
 
-(defmethod ctrl/derive-state :counter-3 [_ state {:keys [counter counter-2]]
+(defmethod ctrl/derive-state :counter-3 [_ state {:keys [counter counter-2]}]
   (+ state counter counter-2))
 
 (def app
@@ -194,7 +194,7 @@ In all these examples, controllers' params were set to `true`. Controller's para
 
 (derive :counter-2 :keechma/controller)
 
-(defmethod ctrl/derive-state :counter-2 [_ _ {:keys [counter]]
+(defmethod ctrl/derive-state :counter-2 [_ _ {:keys [counter]}]
   (* 2 counter))
 
 
