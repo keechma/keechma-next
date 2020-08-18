@@ -33,7 +33,9 @@
   (s/tuple keyword?))
 
 (>def :keechma.controller/type
-  (s/and keyword? #(isa? % :keechma/controller)))
+  (s/or
+    :static (s/and keyword? #(isa? % :keechma/controller))
+    :dynamic fn?))
 
 (>def :keechma.controller.params/dynamic
   fn?)

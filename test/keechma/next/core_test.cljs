@@ -981,4 +981,35 @@
                        (unsub-2)
                        (done))))))
 
+(derive ::dynamic-parent :keechma/controller)
+(derive ::dynamic-child-1 :keechma/controller)
+(derive ::dynamic-child-2 :keechma/controller)
+
+(defmethod ctrl/start ::dynamic-parent [_ _ _ _]
+  0)
+
+(defmethod ctrl/handle ::dynamic-parent [{:keys [state*]} cmd _]
+  (when (= :inc cmd)
+    (swap! state* inc)))
+
+(defmethod ctrl/start ::dynamic-child-1 [_ _ _ _]
+  ::dynamic-child-1)
+
+(defmethod ctrl/start ::dynamic-child-2 [_ _ _ _]
+  ::dynamic-child-2)
+
+(deftest dynamic-controller-type
+  (let [app {:keechma/controllers
+             {::dynamic-parent {:keechma.controller/params true}
+              ::dynamic-child {:keechma.controller/deps [::dynamic-parent]
+                               :keechma.controller/params #(::dynamic-parent %)
+                               :keechma.controller/type #(if (even? %) ::dynamic-child-1 ::dynamic-child-2)}}}
+        app-instance (start! app)]
+    (is (= ::dynamic-child-1 (get-derived-state app-instance ::dynamic-child)))
+    (dispatch app-instance ::dynamic-parent :inc)
+    (is (= ::dynamic-child-2 (get-derived-state app-instance ::dynamic-child)))
+    (dispatch app-instance ::dynamic-parent :inc)
+    (is (= ::dynamic-child-1 (get-derived-state app-instance ::dynamic-child)))
+    (stop! app-instance)))
+
 ;; TODO: Write test to ensure that child apps are not reconciling parent controllers
