@@ -949,4 +949,36 @@
              :test-context}
           @log-2*))
     (stop! app-instance)))
+
+(derive ::update-state-without-transaction :keechma/controller)
+(derive ::update-state-without-transaction-sub :keechma/controller)
+
+(defmethod ctrl/handle ::update-state-without-transaction [{:keys [state*]} cmd _]
+  (when (= :inc cmd)
+    (js/setTimeout #(swap! state* inc))))
+
+(defmethod ctrl/handle ::update-state-without-transaction-sub [{:keys [state*]} cmd payload]
+  (when (= :keechma.on/deps-change cmd)
+    (reset! state* (::update-state-without-transaction payload))))
+
+(deftest updating-controller-state-without-transaction-triggers-subscriptions
+  (let [sub-1* (atom nil)
+        sub-2* (atom nil)
+        app          {:keechma/controllers
+                      {::update-state-without-transaction {:keechma.controller/params true}
+                       ::update-state-without-transaction-sub {:keechma.controller/params true
+                                                               :keechma.controller/deps [::update-state-without-transaction]}}}
+        app-instance (start! app)
+        unsub-1 (subscribe app-instance ::update-state-without-transaction #(reset! sub-1* %))
+        unsub-2 (subscribe app-instance ::update-state-without-transaction-sub #(reset! sub-2* %))]
+    (async done
+      (dispatch app-instance ::update-state-without-transaction :inc)
+      (js/setTimeout (fn []
+                       (is (= 1 (get-derived-state app-instance ::update-state-without-transaction)))
+                       (is (= 1 (get-derived-state app-instance ::update-state-without-transaction-sub)))
+                       (is (= 1 @sub-1* @sub-2*))
+                       (unsub-1)
+                       (unsub-2)
+                       (done))))))
+
 ;; TODO: Write test to ensure that child apps are not reconciling parent controllers

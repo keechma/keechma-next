@@ -363,7 +363,11 @@
   (sync-controller->app-db! app-state* controller-name)
   (if (transacting?)
     (transaction-mark-dirty! app-state* controller-name)
-    (reconcile-from! app-state* controller-name)))
+    (do
+      (when ^boolean goog.DEBUG
+        (js/console.warn "Controller state updated outside transact block. Controller:" (str controller-name)))
+      (transaction-mark-dirty! app-state* controller-name)
+      (reconcile-after-transaction! app-state*))))
 
 (defn on-controller-meta-state-change [app-state* controller-name]
   (sync-controller-meta->app-db! app-state* controller-name)
