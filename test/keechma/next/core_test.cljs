@@ -799,36 +799,42 @@
                           :keechma.app/should-run? noop
                           :keechma.app/deps        [:user-role]}}}
 
+
         conformed-app {:keechma/controllers
                        {:counter-1
                         {:keechma.controller/params true,
                          :keechma.controller/type :counter-1,
-                         :keechma.controller.params/variant :static,
-                         :keechma.controller/variant :singleton},
+                         :keechma.controller/variant :singleton,
+                         :keechma.controller.params/variant :static},
                         [:counter-2]
-                        {:keechma.controller.factory/produce noop,
+                        {:keechma.controller.factory/produce
+                         noop,
                          :keechma.controller/deps [:counter-1],
                          :keechma.controller/type :counter-2,
-                         :keechma.controller/variant :factory},
+                         :keechma.controller/variant :factory,
+                         :keechma.controller.deps/renamed {}},
                         [:counter-2 :foo]
                         {:keechma.controller/params noop,
                          :keechma.controller/deps [:counter-1],
                          :keechma.controller/type :counter-2,
-                         :keechma.controller.params/variant :dynamic,
-                         :keechma.controller/variant :identity},
+                         :keechma.controller/variant :identity,
+                         :keechma.controller.deps/renamed {},
+                         :keechma.controller.params/variant :dynamic},
                         :current-user
                         {:keechma.controller/params noop,
                          :keechma.controller/deps [:counter-1],
                          :keechma.controller/type :current-user,
-                         :keechma.controller.params/variant :dynamic,
-                         :keechma.controller/variant :singleton}},
+                         :keechma.controller/variant :singleton,
+                         :keechma.controller.deps/renamed {},
+                         :keechma.controller.params/variant :dynamic}},
                        :keechma/apps
                        {:public
-                        {:keechma/controllers {:posts
-                                               {:keechma.controller/params true,
-                                                :keechma.controller/type :public-posts,
-                                                :keechma.controller.params/variant :static,
-                                                :keechma.controller/variant :singleton}},
+                        {:keechma/controllers
+                         {:posts
+                          {:keechma.controller/params true,
+                           :keechma.controller/type :public-posts,
+                           :keechma.controller/variant :singleton,
+                           :keechma.controller.params/variant :static}},
                          :keechma.app/should-run? noop,
                          :keechma.app/deps [:user-role],
                          :keechma.app/variant :static},
@@ -838,36 +844,42 @@
                          :keechma.app/load noop,
                          :keechma.app/variant :dynamic},
                         :user
-                        {:keechma/controllers {:posts
-                                               {:keechma.controller/params true,
-                                                :keechma.controller/type :user-posts,
-                                                :keechma.controller.params/variant :static,
-                                                :keechma.controller/variant :singleton}},
+                        {:keechma/controllers
+                         {:posts
+                          {:keechma.controller/params true,
+                           :keechma.controller/type :user-posts,
+                           :keechma.controller/variant :singleton,
+                           :keechma.controller.params/variant :static}},
                          :keechma.app/should-run? noop,
                          :keechma.app/deps [:user-role],
                          :keechma.app/variant :static},
                         :always-on
-                        {:keechma/controllers {:user-role-tracker
-                                               {:keechma.controller/params true,
-                                                :keechma.controller/deps [:user-role],
-                                                :keechma.controller/type :user-role-tracker,
-                                                :keechma.controller.params/variant :static,
-                                                :keechma.controller/variant :singleton},
-                                               :user-role-tracker-guest
-                                               {:keechma.controller/params noop,
-                                                :keechma.controller/deps [:user-role],
-                                                :keechma.controller/type :user-role-tracker,
-                                                :keechma.controller.params/variant :dynamic,
-                                                :keechma.controller/variant :singleton},
-                                               :user-role-tracker-user
-                                               {:keechma.controller/params noop,
-                                                :keechma.controller/deps [:user-role],
-                                                :keechma.controller/type :user-role-tracker,
-                                                :keechma.controller.params/variant :dynamic,
-                                                :keechma.controller/variant :singleton}},
+                        {:keechma/controllers
+                         {:user-role-tracker
+                          {:keechma.controller/params true,
+                           :keechma.controller/deps [:user-role],
+                           :keechma.controller/type :user-role-tracker,
+                           :keechma.controller/variant :singleton,
+                           :keechma.controller.deps/renamed {},
+                           :keechma.controller.params/variant :static},
+                          :user-role-tracker-guest
+                          {:keechma.controller/params noop,
+                           :keechma.controller/deps [:user-role],
+                           :keechma.controller/type :user-role-tracker,
+                           :keechma.controller/variant :singleton,
+                           :keechma.controller.deps/renamed {},
+                           :keechma.controller.params/variant :dynamic},
+                          :user-role-tracker-user
+                          {:keechma.controller/params noop,
+                           :keechma.controller/deps [:user-role],
+                           :keechma.controller/type :user-role-tracker,
+                           :keechma.controller/variant :singleton,
+                           :keechma.controller.deps/renamed {},
+                           :keechma.controller.params/variant :dynamic}},
                          :keechma.app/should-run? noop,
                          :keechma.app/deps [:user-role],
                          :keechma.app/variant :static}}}]
+
     (is (not= :cljs.spec.alpha/invalid (s/conform :keechma/app conformed-app)))
     (is (= conformed-app (conform app)))))
 
@@ -1012,4 +1024,110 @@
     (is (= ::dynamic-child-1 (get-derived-state app-instance ::dynamic-child)))
     (stop! app-instance)))
 
-;; TODO: Write test to ensure that child apps are not reconciling parent controllers
+
+(derive ::deps-renaming-parent-1 :keechma/controller)
+(derive ::deps-renaming-parent-2 :keechma/controller)
+(derive ::deps-renaming-child :keechma/controller)
+
+(defmethod ctrl/start ::deps-renaming-parent-1 [_ _ _ _]
+  0)
+
+(defmethod ctrl/start ::deps-renaming-parent-2 [_ _ _ _]
+  100)
+
+(defmethod ctrl/handle ::deps-renaming-parent-1 [{:keys [state*]} cmd _]
+  (when (= :inc cmd)
+    (swap! state* inc)))
+
+(defmethod ctrl/handle ::deps-renaming-parent-2 [{:keys [state*]} cmd _]
+  (when (= :inc cmd)
+    (swap! state* inc)))
+
+(defmethod ctrl/start ::deps-renaming-child [{:keys [log*]} _ deps-state _]
+  (reset! log* [[:lifecycle/start deps-state]])
+  nil)
+
+(defmethod ctrl/handle ::deps-renaming-child [{:keys [log* deps-state*] :as ctrl} cmd payload]
+  (swap! log* conj [cmd payload @deps-state*]))
+
+(defmethod ctrl/derive-state ::deps-renaming-child [{:keys [log*] :as ctrl} _ deps-state]
+  (swap! log* conj [:lifecycle/derive-state deps-state]))
+
+(deftest deps-renaming-1
+  (let [log* (atom nil)
+        app  {:keechma/controllers
+              {::deps-renaming-parent-1 {:keechma.controller/params true}
+               ::deps-renaming-parent-2 {:keechma.controller/params true}
+               ::deps-renaming-child {:keechma.controller/params true
+                                      :keechma.controller/deps [{:parent-1 ::deps-renaming-parent-1} ::deps-renaming-parent-2]
+                                      :log* log*}}}
+        app-instance (start! app)]
+    (dispatch app-instance ::deps-renaming-parent-1 :inc)
+    (dispatch app-instance ::deps-renaming-parent-2 :inc)
+    (is (= [[:lifecycle/start
+             {:parent-1 0,
+              :keechma.next.core-test/deps-renaming-parent-2 100}]
+            [:keechma.on/start
+             true
+             {:parent-1 0,
+              :keechma.next.core-test/deps-renaming-parent-2 100}]
+            [:lifecycle/derive-state
+             {:parent-1 0,
+              :keechma.next.core-test/deps-renaming-parent-2 100}]
+            [:keechma.on/deps-change
+             {:parent-1 1,
+              :keechma.next.core-test/deps-renaming-parent-2 100}
+             {:parent-1 1,
+              :keechma.next.core-test/deps-renaming-parent-2 100}]
+            [:lifecycle/derive-state
+             {:parent-1 1,
+              :keechma.next.core-test/deps-renaming-parent-2 100}]
+            [:keechma.on/deps-change
+             {:keechma.next.core-test/deps-renaming-parent-2 101}
+             {:parent-1 1,
+              :keechma.next.core-test/deps-renaming-parent-2 101}]
+            [:lifecycle/derive-state
+             {:parent-1 1,
+              :keechma.next.core-test/deps-renaming-parent-2 101}]]
+          (get-derived-state app-instance ::deps-renaming-child)))))
+
+(deftest deps-renaming-2
+  (let [log* (atom nil)
+        app  {:keechma/controllers
+              {::deps-renaming-parent-1 {:keechma.controller/params true}
+               ::deps-renaming-parent-2 {:keechma.controller/params true}
+               ::deps-renaming-child {:keechma.controller/params true
+                                      :keechma.controller/deps {:parent-1 ::deps-renaming-parent-1
+                                                                ::deps-renaming-parent-2 ::deps-renaming-parent-2}
+                                      :log* log*}}}
+        app-instance (start! app)]
+    (dispatch app-instance ::deps-renaming-parent-1 :inc)
+    (dispatch app-instance ::deps-renaming-parent-2 :inc)
+    (is (= [[:lifecycle/start
+             {:parent-1 0,
+              :keechma.next.core-test/deps-renaming-parent-2 100}]
+            [:keechma.on/start
+             true
+             {:parent-1 0,
+              :keechma.next.core-test/deps-renaming-parent-2 100}]
+            [:lifecycle/derive-state
+             {:parent-1 0,
+              :keechma.next.core-test/deps-renaming-parent-2 100}]
+            [:keechma.on/deps-change
+             {:parent-1 1,
+              :keechma.next.core-test/deps-renaming-parent-2 100}
+             {:parent-1 1,
+              :keechma.next.core-test/deps-renaming-parent-2 100}]
+            [:lifecycle/derive-state
+             {:parent-1 1,
+              :keechma.next.core-test/deps-renaming-parent-2 100}]
+            [:keechma.on/deps-change
+             {:keechma.next.core-test/deps-renaming-parent-2 101}
+             {:parent-1 1,
+              :keechma.next.core-test/deps-renaming-parent-2 101}]
+            [:lifecycle/derive-state
+             {:parent-1 1,
+              :keechma.next.core-test/deps-renaming-parent-2 101}]]
+          (get-derived-state app-instance ::deps-renaming-child)))))
+
+;;; TODO: Write test to ensure that child apps are not reconciling parent controllers

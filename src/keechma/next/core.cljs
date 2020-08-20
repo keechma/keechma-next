@@ -92,10 +92,11 @@
 (defn get-controller-derived-deps-state [app-state controller-name]
   (let [controllers      (:controllers app-state)
         controller       (get controllers controller-name)
+        renamed-deps     (:keechma.controller.deps/renamed controller)
         controller-name' (or (get controller :keechma.controller/factory) controller-name)
-        deps             (get-in controllers [controller-name' :keechma.controller/deps])
-        res              (get-derived-deps-state app-state controllers deps)]
-    res))
+        deps             (get-in controllers [controller-name' :keechma.controller/deps])]
+    (-> (get-derived-deps-state app-state controllers deps)
+      (set/rename-keys renamed-deps))))
 
 (defn get-params [app-state controller-name]
   (let [controller (get-in app-state [:controllers controller-name])

@@ -20,8 +20,24 @@
 (>def :keechma.controller.factory/produce
   fn?)
 
+(>def :keechma.controller/dep-map
+  (s/map-of dep? dep?))
+
+(>def :keechma.controller/dep-keyword
+  dep?)
+
+(>def :keechma.controller/dep
+  (s/or
+    :dep-map :keechma.controller/dep-map
+    :dep-keyword :keechma.controller/dep-keyword))
+
+(>def :keechma.controller.deps/input
+  (s/or
+    :dep-map :keechma.controller/dep-map
+    :dep-coll (s/coll-of :keechma.controller/dep :kind vector? :min-count 1)))
+
 (>def :keechma.controller/deps
-  (s/coll-of dep? :kind vector? :min-count 1))
+  (s/coll-of :keechma.controller/dep-keyword :kind vector? :min-count 1))
 
 (>def :keechma.controller.name/singleton
   keyword?)
