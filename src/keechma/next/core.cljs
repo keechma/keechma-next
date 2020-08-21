@@ -69,33 +69,40 @@
 
     :else nil))
 
-(defn get-derived-deps-state [app-state controllers deps]
-  (let [app-db (:app-db app-state)]
-    (when (seq deps)
-      (-> (reduce
-            (fn [acc dep-controller-name]
-              (if (= :factory (get-in controllers [dep-controller-name :keechma.controller/variant]))
-                (reduce
-                  (fn [acc' dep-controller-name']
-                    (if (contains? #{:starting :running} (get-in app-db [dep-controller-name' :phase]))
-                      (assoc! acc' dep-controller-name' (get-in app-db [dep-controller-name' :derived-state]))
-                      acc'))
-                  acc
-                  (get-in app-db [dep-controller-name :produced-keys]))
-                (if (contains? #{:starting :running} (get-in app-db [dep-controller-name :phase]))
-                  (assoc! acc dep-controller-name (get-in app-db [dep-controller-name :derived-state]))
-                  acc)))
-            (transient {})
-            deps)
-        persistent!))))
+(defn get-derived-deps-state
+  ([app-state controllers deps] (get-derived-deps-state app-state controllers deps nil))
+  ([app-state controllers deps renamed-deps]
+   (let [app-db (:app-db app-state)]
+     (when (seq deps)
+       (-> (reduce
+             (fn [acc dep-controller-name]
+               (if (= :factory (get-in controllers [dep-controller-name :keechma.controller/variant]))
+                 (let [renamed-dep (get renamed-deps dep-controller-name)]
+                   (reduce
+                     (fn [acc' dep-controller-name']
+                       (if (contains? #{:starting :running} (get-in app-db [dep-controller-name' :phase]))
+                         (let [dep-controller-name'' (if renamed-dep
+                                                       (vec (concat renamed-dep (rest dep-controller-name')))
+                                                       dep-controller-name')]
+                           (assoc! acc' dep-controller-name'' (get-in app-db [dep-controller-name' :derived-state])))
+                         acc'))
+                     acc
+                     (get-in app-db [dep-controller-name :produced-keys])))
+                 (if (contains? #{:starting :running} (get-in app-db [dep-controller-name :phase]))
+                   (let [dep-controller-name' (or (get renamed-deps dep-controller-name) dep-controller-name)]
+                     (assoc! acc dep-controller-name' (get-in app-db [dep-controller-name :derived-state])))
+                   acc)))
+             (transient {})
+             deps)
+         persistent!)))))
 
 (defn get-controller-derived-deps-state [app-state controller-name]
   (let [controllers      (:controllers app-state)
         controller       (get controllers controller-name)
+        renamed-deps     (:keechma.controller.deps/renamed controller)
         controller-name' (or (get controller :keechma.controller/factory) controller-name)
-        deps             (get-in controllers [controller-name' :keechma.controller/deps])
-        res              (get-derived-deps-state app-state controllers deps)]
-    res))
+        deps             (get-in controllers [controller-name' :keechma.controller/deps])]
+    (get-derived-deps-state app-state controllers deps renamed-deps)))
 
 (defn get-params [app-state controller-name]
   (let [controller (get-in app-state [:controllers controller-name])
@@ -127,7 +134,6 @@
   (swap! app-state* dissoc-in [:subscriptions-meta controller-name sub-id]))
 
 ;; TODO: validate deps - controllers can't depend on non-existing controller
-;; TODO: allow deps remapping -> [:foo] or [{:target :source}] e.g. [{:foo :bar}]
 
 (defn prepare-controllers [controllers context]
   (->> controllers

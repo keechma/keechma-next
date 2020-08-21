@@ -13,13 +13,36 @@
 (defn get-params-variant [controller-def]
   (if (fn? (:keechma.controller/params controller-def)) :dynamic :static))
 
+(>defn get-deps-map [deps]
+  [:keechma.controller.deps/input => :keechma.controller/dep-map]
+  (if (map? deps)
+    deps
+    (let [deps-maps (reduce
+                      (fn [acc v]
+                        (if (map? v)
+                          (conj acc v)
+                          (conj acc {v v})))
+                      []
+                      deps)]
+      (apply merge deps-maps))))
+
+(defn conform-deps [controller]
+  (let [deps (:keechma.controller/deps controller)]
+    (if (seq deps)
+      (let [deps-map (get-deps-map deps)
+            renamed-deps (into {} (filter (fn [[k v]] (not= k v)) deps-map))]
+        (assoc controller :keechma.controller/deps (vec (keys deps-map))
+                          :keechma.controller.deps/renamed renamed-deps))
+      (dissoc controller :keechma.controller/deps))))
+
 (defn conform-controller [[controller-name controller-def]]
   (let [controller-variant (get-controller-variant controller-name)
-        params-variant    (get-params-variant controller-def)]
+        params-variant (get-params-variant controller-def)]
     [controller-name
      (cond-> controller-def
        true (update :keechma.controller/type #(or % (if (vector? controller-name) (first controller-name) controller-name)))
        true (assoc :keechma.controller/variant controller-variant)
+       true conform-deps
        (not= :factory controller-variant) (assoc :keechma.controller.params/variant params-variant))]))
 
 (defn conform-controllers [controllers]
