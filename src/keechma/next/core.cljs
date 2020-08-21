@@ -134,7 +134,6 @@
   (swap! app-state* dissoc-in [:subscriptions-meta controller-name sub-id]))
 
 ;; TODO: validate deps - controllers can't depend on non-existing controller
-;; TODO: allow deps remapping -> [:foo] or [{:target :source}] e.g. [{:foo :bar}]
 
 (defn prepare-controllers [controllers context]
   (->> controllers
