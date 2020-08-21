@@ -1059,7 +1059,7 @@
               {::deps-renaming-parent-1 {:keechma.controller/params true}
                ::deps-renaming-parent-2 {:keechma.controller/params true}
                ::deps-renaming-child {:keechma.controller/params true
-                                      :keechma.controller/deps [{:parent-1 ::deps-renaming-parent-1} ::deps-renaming-parent-2]
+                                      :keechma.controller/deps [{::deps-renaming-parent-1 :parent-1} ::deps-renaming-parent-2]
                                       :log* log*}}}
         app-instance (start! app)]
     (dispatch app-instance ::deps-renaming-parent-1 :inc)
@@ -1097,7 +1097,7 @@
               {::deps-renaming-parent-1 {:keechma.controller/params true}
                ::deps-renaming-parent-2 {:keechma.controller/params true}
                ::deps-renaming-child {:keechma.controller/params true
-                                      :keechma.controller/deps {:parent-1 ::deps-renaming-parent-1
+                                      :keechma.controller/deps {::deps-renaming-parent-1 :parent-1
                                                                 ::deps-renaming-parent-2 ::deps-renaming-parent-2}
                                       :log* log*}}}
         app-instance (start! app)]
@@ -1129,5 +1129,67 @@
              {:parent-1 1,
               :keechma.next.core-test/deps-renaming-parent-2 101}]]
           (get-derived-state app-instance ::deps-renaming-child)))))
+
+(derive ::rename-factory-parent :keechma/controller)
+(derive ::rename-factory :keechma/controller)
+(derive ::rename-factory-2 :keechma/controller)
+(derive ::rename-factory-2-child :keechma/controller)
+
+(defmethod ctrl/handle ::rename-factory-parent [{:keys [state*] :as ctrl} cmd _]
+  (when (= :inc cmd)
+    (swap! state* inc)))
+
+(defmethod ctrl/handle ::rename-factory [{:keys [state* deps-state*] :as ctrl} cmd payload]
+  (when (= :keechma.on/start cmd)
+    (reset! state* @deps-state*)))
+
+(defmethod ctrl/handle ::rename-factory-2 [{:keys [state* deps-state*] :as ctrl} cmd payload]
+  (when (= :keechma.on/start cmd)
+    (reset! state* @deps-state*)))
+
+(defmethod ctrl/handle ::rename-factory-2-child [{:keys [state* deps-state*] :as ctrl} cmd payload]
+  (when (= :keechma.on/start cmd)
+    (reset! state* @deps-state*)))
+
+(deftest deps-renaming-3
+  (let [app          {:keechma/controllers
+                      {::rename-factory-parent {:keechma.controller/params true}
+                       [::rename-factory] {:keechma.controller.factory/produce
+                                           (fn [{:keys [parent]}]
+                                             (-> (map (fn [v] [v {:keechma.controller/params true}]) (range 0 parent))
+                                               (into {})))
+                                           :keechma.controller/deps {::rename-factory-parent :parent}}
+                       [::rename-factory-2] {:keechma.controller.factory/produce
+                                             (fn [deps]
+                                               (->> (map (fn [[[type idx]] _]
+                                                           [[type idx] {:keechma.controller/params true}]) deps)
+                                                 (into {})))
+                                             :keechma.controller/deps {[::rename-factory] [:factory]}}
+                       ::rename-factory-2-child {:keechma.controller/params
+                                                 (fn [deps]
+                                                   (seq deps))
+                                                 :keechma.controller/deps {[::rename-factory-2] [:factory-2]}}}}
+        app-instance (start! app)]
+    (dispatch app-instance ::rename-factory-parent :inc)
+    (is (= {:keechma.next.core-test/rename-factory-parent 1,
+            [:keechma.next.core-test/rename-factory 0] {:parent 1},
+            [:keechma.next.core-test/rename-factory-2 [:factory 0]]
+            {[:factory 0] {:parent 1}},
+            :keechma.next.core-test/rename-factory-2-child
+            {[:factory-2 [:factory 0]] {[:factory 0] {:parent 1}}}}
+          (get-derived-state app-instance)))
+    (dispatch app-instance ::rename-factory-parent :inc)
+    (is (= {:keechma.next.core-test/rename-factory-parent 2,
+            [:keechma.next.core-test/rename-factory 0] {:parent 1},
+            [:keechma.next.core-test/rename-factory-2 [:factory 0]]
+            {[:factory 0] {:parent 1}},
+            :keechma.next.core-test/rename-factory-2-child
+            {[:factory-2 [:factory 0]] {[:factory 0] {:parent 1}},
+             [:factory-2 [:factory 1]]
+             {[:factory 0] {:parent 1}, [:factory 1] {:parent 2}}},
+            [:keechma.next.core-test/rename-factory 1] {:parent 2},
+            [:keechma.next.core-test/rename-factory-2 [:factory 1]]
+            {[:factory 0] {:parent 1}, [:factory 1] {:parent 2}}}
+          (get-derived-state app-instance)))))
 
 ;;; TODO: Write test to ensure that child apps are not reconciling parent controllers

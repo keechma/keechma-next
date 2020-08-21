@@ -1,6 +1,5 @@
 (ns keechma.next.conformer
   (:require [com.fulcrologic.guardrails.core :refer [>defn | ? =>]]
-            [clojure.set :as set]
             [keechma.next.spec]))
 
 (declare conform-apps)
@@ -32,8 +31,8 @@
     (if (seq deps)
       (let [deps-map (get-deps-map deps)
             renamed-deps (into {} (filter (fn [[k v]] (not= k v)) deps-map))]
-        (assoc controller :keechma.controller/deps (vec (vals deps-map))
-                          :keechma.controller.deps/renamed (set/map-invert renamed-deps)))
+        (assoc controller :keechma.controller/deps (vec (keys deps-map))
+                          :keechma.controller.deps/renamed renamed-deps))
       (dissoc controller :keechma.controller/deps))))
 
 (defn conform-controller [[controller-name controller-def]]
