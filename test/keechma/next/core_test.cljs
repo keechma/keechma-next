@@ -1192,4 +1192,62 @@
             {[:factory 0] {:parent 1}, [:factory 1] {:parent 2}}}
           (get-derived-state app-instance)))))
 
+(derive ::api-provider :keechma/controller)
+(derive ::api-consumer :keechma/controller)
+
+(defprotocol TestApi
+  (test-api-call [this arg]))
+
+(defmethod ctrl/api ::api-provider [_]
+  (reify TestApi
+    (test-api-call [_ arg]
+      [::called arg])))
+
+(defmethod ctrl/start ::api-consumer [_ _ _ _]
+  [])
+
+(defmethod ctrl/handle ::api-consumer [{:keys [state*] :as ctrl} cmd payload]
+  (when (= :call cmd)
+    (swap! state* conj (ctrl/call ctrl ::api-provider test-api-call payload))))
+
+(deftest controller-api-1
+  (let [app {:keechma/controllers {::api-provider {:keechma.controller/params true}
+                                   ::api-consumer-1 {:keechma.controller/params true
+                                                     :keechma.controller/type ::api-consumer
+                                                     :keechma.controller/deps [::api-provider]}
+                                   ::api-consumer-2 {:keechma.controller/params true
+                                                     :keechma.controller/type ::api-consumer}}}
+        app-instance (start! app)]
+    (dispatch app-instance ::api-consumer-1 :call {:foo :bar})
+    (is (= [[::called {:foo :bar}]]
+          (get-derived-state app-instance ::api-consumer-1)))
+    (is (thrown? js/Error (dispatch app-instance ::api-consumer-2 :call {:foo :bar})))))
+
+(derive ::c1 :keechma/controller)
+(derive ::c2 :keechma/controller)
+
+(deftest controller-deps-validation-1
+  (let [app {:keechma/controllers {::c1 {:keechma.controller/params true}
+                                   ::c2 {:keechma.controller/params true
+                                         :keechma.controller/deps [::c1 ::c3 ::c4]}}}]
+    (is (thrown? js/Error (start! app)))))
+
+(deftest controller-deps-validation-2
+  (let [app {:keechma/controllers {::c1 {:keechma.controller/params true}
+                                   ::c2 {:keechma.controller/params true
+                                         :keechma.controller/deps [::c1 ::c2]}}}]
+    (is (thrown? js/Error (start! app)))))
+
+(deftest controller-deps-validation-3
+  (let [app {:keechma/controllers {::c1 {:keechma.controller/params true}}
+             :keechma/apps
+             {:foo {:keechma.app/should-run? (constantly true)
+                    :keechma.app/deps [::c1]
+                    :keechma/controllers {::c2 {:keechma.controller/params true}}}
+              :bar {:keechma.app/should-run? (constantly true)
+                    :keechma.app/deps [::c1]
+                    :keechma/controllers {::c2 {:keechma.controller/params true}}}}}]
+    (is (thrown? js/Error (start! app)))))
+
 ;;; TODO: Write test to ensure that child apps are not reconciling parent controllers
+
