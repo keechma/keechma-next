@@ -228,7 +228,7 @@ In all these examples, controllers' params were set to `true`. Controller's para
 
 ### Controller variants
 
-In examples so far, we've used only on controller variant - singleton. Singleton controllers are great when you have only one instance of controller running in the system. For instance, you could have a `:router` controller, `:jwt` or `:current-user` controller. Another variant is identity controllers. Identity controllers use a composite key `[:user :some-identity]`. They are useful when you want to mount some controller multiple times in the same app. For all other purposes they are identical to singleton controllers. Last variant is factory controller. Factory controllers are not mounted directly, instead they can dynamically produce configuration for controllers that should be mounted. This is useful when you have to dynamically mount controllers based on some data that is not available in development time. For instance you might have a Kanban board, and you want to mount a controller for each column. All these controllers will be of same type, but each will be its own instance. Factory controllers' configuration looks different from the singleton and identity controllers:
+In examples so far, we've used only one controller variant - singleton. Singleton controllers are great when you have only one instance of controller running in the system. For instance, you could have a `:router` controller, `:jwt` or `:current-user` controller. Another variant is identity controllers. Identity controllers use a composite key `[:user :some-identity]`. They are useful when you want to mount some controller multiple times in the same app. For all other purposes they are identical to singleton controllers. Last variant is factory controller. Factory controllers are not mounted directly, instead they can dynamically produce configuration for controllers that should be mounted. This is useful when you have to dynamically mount controllers based on some data that is not available in development time. For instance you might have a Kanban board, and you want to mount a controller for each column. All these controllers will be of same type, but each will be its own instance. Factory controllers' configuration looks different from the singleton and identity controllers:
 
 ```clojure
 {:keechma/controllers
@@ -251,7 +251,7 @@ Controller variant is determined based on the configuration (controller key and 
 
 ### Controller lifecycle
 
-Controllers have a defined lifecycle which is guaranteed by Keechma/next. Lifecycles reduce need for a lot of boilerplate code that deals with resource initialization and teardown. Each controller is implemented with a small number of multimethods (consult documentation in controller.cljs file). Controllers should be "thin", they should only act as a glue code between the UI, various APIs and domain code. Controllers are unopinionated on purpose, you get full access to the state atom, so you can implement features in any way you need. Keechma/next will call appropriate methods when controller's state changes - you can use these methods to implement your logic.
+Controllers have a defined lifecycle which is guaranteed by Keechma/next. Lifecycles reduce need for a lot of boilerplate code that deals with resource initialization and teardown. Each controller is implemented with a small number of multimethods (consult the [documentation in controller.cljs](src/keechma/next/controller.cljs) file). Controllers should be "thin", they should only act as a glue code between the UI, various APIs and domain code. Controllers are unopinionated on purpose, you get full access to the state atom, so you can implement features in any way you need. Keechma/next will call appropriate methods when controller's state changes - you can use these methods to implement your logic.
 
 #### On application start
 
@@ -384,7 +384,7 @@ Keechma/next removes dependency on Reagent _and_ React. It's a standalone librar
 
 ### Is Keechma/next the right choice for you?
 
-Depending on the size of your app(s), and the rythm of your development, you might not see immediate need for the architecture provided by Keechma/next. But, Keechma/next shouldn't be judged by the code you write, instead think about all the code you _won't have to write_. Predictable and deterministic apps are not trivial to implement, and in our opinion Keechma/next provides everything you need to pull it of. Keechma/next is a contained library, without any global state leaking, so you can try it out without major commitment. If you do try it, feel free to reach out to us on #keechma channel on the Clojurians slack.
+Depending on the size of your app(s), and the rhythm of your development, you might not see immediate need for the architecture provided by Keechma/next. But, Keechma/next shouldn't be judged by the code you write, instead think about all the code you _won't have to write_. Predictable and deterministic apps are not trivial to implement, and in our opinion Keechma/next provides everything you need to pull it of. Keechma/next is a contained library, without any global state leaking, so you can try it out without major commitment. If you do try it, feel free to reach out to us on #keechma channel on the Clojurians slack.
 
 ## Commercial support
 
