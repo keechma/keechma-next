@@ -16,6 +16,7 @@
 (declare reconcile-initial!)
 
 (def ^:dynamic *transaction-depth* 0)
+(def ^:dynamic *stopping* false)
 
 (defn transacting? []
   (pos? *transaction-depth*))
@@ -462,20 +463,22 @@
   (swap! app-state* update-in [:transaction :dirty-meta] conj controller-name))
 
 (defn on-controller-state-change [app-state* controller-name]
-  (sync-controller->app-db! app-state* controller-name)
-  (if (transacting?)
-    (transaction-mark-dirty! app-state* controller-name)
-    (do
-      (when ^boolean goog.DEBUG
-        (js/console.warn "Controller state updated outside transact block. Controller:" (str controller-name)))
+  (when-not *stopping*
+    (sync-controller->app-db! app-state* controller-name)
+    (if (transacting?)
       (transaction-mark-dirty! app-state* controller-name)
-      (reconcile-after-transaction! app-state*))))
+      (do
+        (when ^boolean goog.DEBUG
+          (js/console.warn "Controller state updated outside transact block. Controller:" (str controller-name)))
+        (transaction-mark-dirty! app-state* controller-name)
+        (reconcile-after-transaction! app-state*)))))
 
 (defn on-controller-meta-state-change [app-state* controller-name]
-  (sync-controller-meta->app-db! app-state* controller-name)
-  (if (transacting?)
-    (transaction-mark-dirty-meta! app-state* controller-name)
-    (batched-notify-subscriptions-meta @app-state* #{controller-name})))
+  (when-not *stopping*
+    (sync-controller-meta->app-db! app-state* controller-name)
+    (if (transacting?)
+      (transaction-mark-dirty-meta! app-state* controller-name)
+      (batched-notify-subscriptions-meta @app-state* #{controller-name}))))
 
 (defn controller-start! [app-state* controller-name params]
   (swap! app-state* assoc-in [:app-db controller-name] {:params params :phase :initializing :events-buffer []})
@@ -737,7 +740,8 @@
       (-get-id [_] app-id)
       IRootAppInstance
       (-stop! [_]
-        (stop-app! app-state* [])
+        (binding [*stopping* true]
+          (stop-app! app-state* []))
         (swap! app-state* assoc :keechma.app/state ::stopped))
       (-get-batcher [_]
         batcher)
