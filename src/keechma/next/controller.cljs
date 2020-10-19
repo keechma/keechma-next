@@ -84,18 +84,20 @@
      (protocols/-broadcast app event payload)
      nil)))
 
-(defn transact [controller transaction]
+(defn transact
   "Runs the transaction fn inside the transact block."
+  [controller transaction]
   (let [app (:keechma/app controller)]
     (protocols/-transact app transaction)))
 
-(defn call [controller controller-name api-fn & args]
-
+(defn call
   "Calls an API fn on the controller's exposed API object."
+  [controller controller-name api-fn & args]
   (let [app (:keechma/app controller)]
     (protocols/-call app controller-name api-fn args)))
 
-(defn get-api* [controller controller-name]
+(defn get-api*
   "Returns controller's exposed API object wrapped in a derefable object."
+  [controller controller-name]
   (let [app (:keechma/app controller)]
     (protocols/-get-api* app controller-name)))

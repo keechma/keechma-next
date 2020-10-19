@@ -834,12 +834,14 @@
     :arglists '([app-instance])}
   (make-app-proxy protocols/-get-app-state*))
 
-(defn call [app controller-name api-fn & args]
+(defn call
   "Calls an API fn on the controller's exposed API object."
+  [app controller-name api-fn & args]
   (protocols/-call app controller-name api-fn args))
 
-(defn get-running-controllers [app-instance]
+(defn get-running-controllers
   "Returns a map of running controllers. Useful for debugging."
+   [app-instance]
   (let [app-state* (get-app-state* app-instance)
         app-state  @app-state*]
     (:app-db app-state)))

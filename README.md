@@ -402,10 +402,16 @@ Keechma/next is inspired by many libraries in Clojure ecosystem (and beyond). He
 - [adapton](https://github.com/roman01la/adapton)
 - [lentes](https://github.com/funcool/lentes)
 
+## Contributing
 
+1. Fork this repo
+2. run `clojure -A:deps:test` from terminal
+3. Fix something and make sure to visit http://localhost:8021/ see
+   tests are green.
+4. Push your changes and do a PR.
 
 ## License
 
 Copyright © 2020 Mihael Konjevic, Tibor Kranjcec
 
-Distributed under the MIT License. 
+Distributed under the MIT License.
