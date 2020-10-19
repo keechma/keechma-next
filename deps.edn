@@ -2,9 +2,9 @@
  :deps {org.clojure/clojure {:mvn/version "1.10.1"}
         org.clojure/clojurescript {:mvn/version "1.10.764"}
         com.stuartsierra/dependency {:mvn/version "1.0.0"}
-        medley {:mvn/version "1.3.0"}
+        medley/medley {:mvn/version "1.3.0"}
         com.fulcrologic/guardrails {:mvn/version "0.0.12"}}
  :aliases
  {:test {:extra-paths ["test"]
-         :extra-deps [thheller/shadow-cljs {:mvn/version "2.10.17"}]
-         :main-opts ["-m" "shadow.cljs.devtools.cli"]}}}
+         :extra-deps {thheller/shadow-cljs {:mvn/version "2.11.5"}}
+         :main-opts ["-m" "shadow.cljs.devtools.cli" "watch" "test"]}}}
