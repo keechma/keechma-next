@@ -11,8 +11,8 @@
 
 (defn dep? [val]
   (or (keyword? val)
-      (and (vector? val) (= 1 (count val)))
-      (and (vector? val) (= 2 (count val)))))
+    (and (vector? val) (= 1 (count val)))
+    (and (vector? val) (= 2 (count val)))))
 
 (defn inline-app-variant [[variant app]]
   (assoc app :keechma.app/variant variant))
@@ -53,6 +53,9 @@
     :static (s/and keyword? #(isa? % :keechma/controller))
     :dynamic fn?))
 
+(>def :keechma.controller/is-global
+  boolean)
+
 (>def :keechma.controller.params/dynamic
   fn?)
 
@@ -61,23 +64,27 @@
 
 (>def :keechma.controller/params
   (s/or :dynamic :keechma.controller.params/dynamic
-        :static :keechma.controller.params/static))
+    :static :keechma.controller.params/static))
 
 (>def :keechma.controller.config/dynamic
   (s/and (s/keys :req [:keechma.controller/deps
                        :keechma.controller/params
-                       :keechma.controller/type])
-         dynamic-config?))
+                       :keechma.controller/type]
+           :opt [:keechma.controller/is-global])
+    dynamic-config?))
 
 (>def :keechma.controller.config/static
   (s/and (s/keys :req [:keechma.controller/params
-                       :keechma.controller/type])
-         static-config?))
+                       :keechma.controller/type]
+           :opt [:keechma.controller/is-global])
+    static-config?))
 
 (>def :keechma.controller.config/factory
-  (s/keys :req [:keechma.controller/deps
-                :keechma.controller/type
-                :keechma.controller.factory/produce]))
+  (s/keys
+    :req [:keechma.controller/deps
+          :keechma.controller/type
+          :keechma.controller.factory/produce]
+    :opt [:keechma.controller/is-global]))
 
 (>def :keechma.controller/config
   (s/or :static :keechma.controller.config/static
@@ -101,11 +108,12 @@
 (>def :keechma.controller.factory/produced
   (s/keys
     :req [:keechma.controller/params]
-    :opt [:keechma.controller/deps]))
+    :opt [:keechma.controller/deps
+          :keechma.controller/is-global]))
 
 (>def :keechma/controllers
   (s/and (s/map-of #(or (keyword? %) (vector? %)) map?)
-         (s/coll-of :keechma/controller :into {})))
+    (s/coll-of :keechma/controller :into {})))
 
 (>def :keechma/app
   (s/keys

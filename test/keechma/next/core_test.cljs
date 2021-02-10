@@ -1223,6 +1223,22 @@
           (get-derived-state app-instance ::api-consumer-1)))
     (is (thrown? js/Error (dispatch app-instance ::api-consumer-2 :call {:foo :bar})))))
 
+(deftest controller-api-2
+  (let [app {:keechma/controllers {::api-provider {:keechma.controller/params true
+                                                   :keechma.controller/is-global true}
+                                   ::api-consumer-1 {:keechma.controller/params true
+                                                     :keechma.controller/type ::api-consumer
+                                                     :keechma.controller/deps [::api-provider]}
+                                   ::api-consumer-2 {:keechma.controller/params true
+                                                     :keechma.controller/type ::api-consumer}}}
+        app-instance (start! app)]
+    (dispatch app-instance ::api-consumer-1 :call {:foo :bar})
+    (dispatch app-instance ::api-consumer-2 :call {:baz :qux})
+    (is (= [[::called {:foo :bar}]]
+          (get-derived-state app-instance ::api-consumer-1)))
+    (is (= [[::called {:baz :qux}]]
+          (get-derived-state app-instance ::api-consumer-2)))))
+
 (derive ::c1 :keechma/controller)
 (derive ::c2 :keechma/controller)
 

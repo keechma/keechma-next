@@ -6,4 +6,4 @@
   :source-paths ["src"]
   :dependencies [[com.stuartsierra/dependency "1.0.0"]
                  [medley "1.3.0"]
-                 [com.fulcrologic/guardrails "0.0.12"]])
+                 [com.fulcrologic/guardrails "1.1.3"]])

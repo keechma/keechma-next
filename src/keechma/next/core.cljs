@@ -357,7 +357,7 @@
 
     (assoc controller
       :keechma.controller/type controller-type
-      :keechma.controller/name controller-name
+      :keechma.controller/name controller-name 
       :keechma.controller/params params
       :keechma.controller/id id
       :keechma/app (reify
@@ -375,12 +375,15 @@
                              deps-name->renamed (set/map-invert controller-running-deps-map)
                              real-target-controller-name (get deps-name->renamed target-controller-name)]
                          (if (not real-target-controller-name)
-                           (throw (keechma-ex-info
-                                    "Attempted to call an API function on non-existing dep"
-                                    :keechma.controller.deps/missing
-                                    {:keechma.controller.api/fn api-fn
-                                     :keechma.controller.api/args args
-                                     :keechma.controller/dep target-controller-name}))
+                           (let [controller (get-in @app-state* [:controllers target-controller-name])]
+                             (if (:keechma.controller/is-global controller)
+                               (apply -call app-state* target-controller-name api-fn args)
+                               (throw (keechma-ex-info
+                                        "Attempted to call an API function on non-existing dep"
+                                        :keechma.controller.deps/missing
+                                        {:keechma.controller.api/fn api-fn
+                                         :keechma.controller.api/args args
+                                         :keechma.controller/dep target-controller-name}))))
                            (apply -call app-state* real-target-controller-name api-fn args))))
                      (-get-api* [_ controller-name]
                        (-get-api* app-state* controller-name))
