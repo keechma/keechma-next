@@ -357,7 +357,7 @@
 
     (assoc controller
       :keechma.controller/type controller-type
-      :keechma.controller/name controller-name 
+      :keechma.controller/name controller-name
       :keechma.controller/params params
       :keechma.controller/id id
       :keechma/app (reify
