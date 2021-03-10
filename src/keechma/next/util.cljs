@@ -1,12 +1,10 @@
 (ns keechma.next.util)
 
 (defn get-dirty-deps [prev-deps next-deps]
-  (println "GET DIRTY DEPS" prev-deps next-deps)
   (let [dirty
         (reduce
           (fn [m k]
             (let [v (get next-deps k)]
-              (println "--->" k (identical? v (get prev-deps k)))
               (if-not (identical? v (get prev-deps k))
                 (assoc m k v)
                 m)))
