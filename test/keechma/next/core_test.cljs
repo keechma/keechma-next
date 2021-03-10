@@ -1075,8 +1075,7 @@
              {:parent-1 0,
               :keechma.next.core-test/deps-renaming-parent-2 100}]
             [:keechma.on/deps-change
-             {:parent-1 1,
-              :keechma.next.core-test/deps-renaming-parent-2 100}
+             {:parent-1 1}
              {:parent-1 1,
               :keechma.next.core-test/deps-renaming-parent-2 100}]
             [:lifecycle/derive-state
@@ -1114,8 +1113,7 @@
              {:parent-1 0,
               :keechma.next.core-test/deps-renaming-parent-2 100}]
             [:keechma.on/deps-change
-             {:parent-1 1,
-              :keechma.next.core-test/deps-renaming-parent-2 100}
+             {:parent-1 1}
              {:parent-1 1,
               :keechma.next.core-test/deps-renaming-parent-2 100}]
             [:lifecycle/derive-state

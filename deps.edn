@@ -6,5 +6,5 @@
         com.fulcrologic/guardrails {:mvn/version "1.1.3"}}
  :aliases
  {:test {:extra-paths ["test"]
-         :extra-deps {thheller/shadow-cljs {:mvn/version "2.11.5"}}
+         :extra-deps {thheller/shadow-cljs {:mvn/version "2.11.22"}}
          :main-opts ["-m" "shadow.cljs.devtools.cli" "watch" "test"]}}}

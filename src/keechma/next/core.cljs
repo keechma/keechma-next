@@ -496,7 +496,7 @@
           deps-state  (get-controller-derived-deps-state @app-state* controller-name)
           state       (ctrl/start instance params deps-state prev-state)]
       (reset! state* state)
-      (swap! app-state* update-in [:app-db controller-name] #(merge % {:state state :phase :starting}))
+      (swap! app-state* update-in [:app-db controller-name] #(merge % {:state state :phase :starting :prev-deps-state deps-state}))
       (-dispatch app-state* controller-name :keechma.on/start params)
       (swap! app-state* assoc-in [:app-db controller-name :phase] :running)
       (doseq [[event payload] (get-in @app-state* [:app-db controller-name :events-buffer])]
