@@ -1,14 +1,14 @@
 (ns keechma.next.core
   (:require
-    [keechma.next.controller :as ctrl]
-    [keechma.next.graph :refer [subgraph-reachable-from subgraph-reachable-from-set]]
-    [keechma.next.util :refer [get-dirty-deps get-lowest-common-ancestor-for-paths]]
-    [keechma.next.protocols :as protocols :refer [IAppInstance IRootAppInstance]]
-    [keechma.next.conformer :refer [conform conform-factory-produced]]
-    [medley.core :refer [dissoc-in]]
-    [com.stuartsierra.dependency :as dep]
-    [clojure.set :as set]
-    [clojure.string :as str]))
+   [keechma.next.controller :as ctrl]
+   [keechma.next.graph :refer [subgraph-reachable-from subgraph-reachable-from-set]]
+   [keechma.next.util :refer [get-dirty-deps get-lowest-common-ancestor-for-paths]]
+   [keechma.next.protocols :as protocols :refer [IAppInstance IRootAppInstance]]
+   [keechma.next.conformer :refer [conform conform-factory-produced]]
+   [medley.core :refer [dissoc-in]]
+   [com.stuartsierra.dependency :as dep]
+   [clojure.set :as set]
+   [clojure.string :as str]))
 
 (declare reconcile-from!)
 (declare -dispatch)
@@ -24,35 +24,35 @@
 (defn factory-produced-deps-valid? [app-db factory-deps factory-produced-deps]
   (let [expanded-factory-deps
         (reduce
-          (fn [acc d]
-            (let [dep-produced-keys (get-in app-db [d :produced-keys])]
-              (if (seq dep-produced-keys)
-                (set/union acc #{d} dep-produced-keys)
-                (conj acc d))))
-          #{}
-          factory-deps)]
+         (fn [acc d]
+           (let [dep-produced-keys (get-in app-db [d :produced-keys])]
+             (if (seq dep-produced-keys)
+               (set/union acc #{d} dep-produced-keys)
+               (conj acc d))))
+         #{}
+         factory-deps)]
     (set/subset? factory-produced-deps expanded-factory-deps)))
 
 (defn keechma-ex-info
   ([message anomaly] (keechma-ex-info message anomaly {}))
   ([message anomaly props]
    (ex-info message (assoc props
-                      :keechma.anomalies/category anomaly
-                      :keechma.anomalies/message message))))
+                           :keechma.anomalies/category anomaly
+                           :keechma.anomalies/message message))))
 
 (defn default-batcher [batched-fn]
   (batched-fn))
 
 (defn build-controllers-graph [controllers]
   (reduce
-    (fn [acc [k c]]
-      (reduce
-        (fn [acc' d]
-          (dep/depend acc' k d))
-        acc
-        (:keechma.controller/deps c)))
-    (dep/graph)
-    controllers))
+   (fn [acc [k c]]
+     (reduce
+      (fn [acc' d]
+        (dep/depend acc' k d))
+      acc
+      (:keechma.controller/deps c)))
+   (dep/graph)
+   controllers))
 
 (defn determine-actions [old-params new-params]
   (cond
@@ -76,26 +76,26 @@
    (let [app-db (:app-db app-state)]
      (when (seq deps)
        (-> (reduce
-             (fn [acc dep-controller-name]
-               (if (= :factory (get-in controllers [dep-controller-name :keechma.controller/variant]))
-                 (let [renamed-dep (get renamed-deps dep-controller-name)]
-                   (reduce
-                     (fn [acc' dep-controller-name']
-                       (if (contains? #{:starting :running} (get-in app-db [dep-controller-name' :phase]))
-                         (let [dep-controller-name'' (if renamed-dep
-                                                       (vec (concat renamed-dep (rest dep-controller-name')))
-                                                       dep-controller-name')]
-                           (assoc! acc' dep-controller-name'' (get-in app-db [dep-controller-name' :derived-state])))
-                         acc'))
-                     acc
-                     (get-in app-db [dep-controller-name :produced-keys])))
-                 (if (contains? #{:starting :running} (get-in app-db [dep-controller-name :phase]))
-                   (let [dep-controller-name' (or (get renamed-deps dep-controller-name) dep-controller-name)]
-                     (assoc! acc dep-controller-name' (get-in app-db [dep-controller-name :derived-state])))
-                   acc)))
-             (transient {})
-             deps)
-         persistent!)))))
+            (fn [acc dep-controller-name]
+              (if (= :factory (get-in controllers [dep-controller-name :keechma.controller/variant]))
+                (let [renamed-dep (get renamed-deps dep-controller-name)]
+                  (reduce
+                   (fn [acc' dep-controller-name']
+                     (if (contains? #{:starting :running} (get-in app-db [dep-controller-name' :phase]))
+                       (let [dep-controller-name'' (if renamed-dep
+                                                     (vec (concat renamed-dep (rest dep-controller-name')))
+                                                     dep-controller-name')]
+                         (assoc! acc' dep-controller-name'' (get-in app-db [dep-controller-name' :derived-state])))
+                       acc'))
+                   acc
+                   (get-in app-db [dep-controller-name :produced-keys])))
+                (if (contains? #{:starting :running} (get-in app-db [dep-controller-name :phase]))
+                  (let [dep-controller-name' (or (get renamed-deps dep-controller-name) dep-controller-name)]
+                    (assoc! acc dep-controller-name' (get-in app-db [dep-controller-name :derived-state])))
+                  acc)))
+            (transient {})
+            deps)
+           persistent!)))))
 
 (defn get-controller-derived-deps-state [app-state controller-name]
   (let [controllers      (:controllers app-state)
@@ -113,26 +113,26 @@
         deps             (get-in controllers [controller-name' :keechma.controller/deps])
         renamed-deps (get-in controllers [controller-name :keechma.controller.deps/renamed])]
     (-> (reduce
-          (fn [acc dep-controller-name]
-            (if (= :factory (get-in controllers [dep-controller-name :keechma.controller/variant]))
-              (let [renamed-dep (get renamed-deps dep-controller-name)]
-                (reduce
-                  (fn [acc' dep-controller-name']
-                    (if (contains? #{:starting :running} (get-in app-db [dep-controller-name' :phase]))
-                      (let [dep-controller-name'' (if renamed-dep
-                                                    (vec (concat renamed-dep (rest dep-controller-name')))
-                                                    dep-controller-name')]
-                        (assoc! acc' dep-controller-name' dep-controller-name''))
-                      acc'))
-                  acc
-                  (get-in app-db [dep-controller-name :produced-keys])))
-              (if (contains? #{:starting :running} (get-in app-db [dep-controller-name :phase]))
-                (let [dep-controller-name' (or (get renamed-deps dep-controller-name) dep-controller-name)]
-                  (assoc! acc dep-controller-name dep-controller-name'))
-                acc)))
-          (transient {})
-          deps)
-      persistent!)))
+         (fn [acc dep-controller-name]
+           (if (= :factory (get-in controllers [dep-controller-name :keechma.controller/variant]))
+             (let [renamed-dep (get renamed-deps dep-controller-name)]
+               (reduce
+                (fn [acc' dep-controller-name']
+                  (if (contains? #{:starting :running} (get-in app-db [dep-controller-name' :phase]))
+                    (let [dep-controller-name'' (if renamed-dep
+                                                  (vec (concat renamed-dep (rest dep-controller-name')))
+                                                  dep-controller-name')]
+                      (assoc! acc' dep-controller-name' dep-controller-name''))
+                    acc'))
+                acc
+                (get-in app-db [dep-controller-name :produced-keys])))
+             (if (contains? #{:starting :running} (get-in app-db [dep-controller-name :phase]))
+               (let [dep-controller-name' (or (get renamed-deps dep-controller-name) dep-controller-name)]
+                 (assoc! acc dep-controller-name dep-controller-name'))
+               acc)))
+         (transient {})
+         deps)
+        persistent!)))
 
 (defn get-params [app-state controller-name]
   (let [controller (get-in app-state [:controllers controller-name])
@@ -154,7 +154,7 @@
         nodeset              (dep/nodes controllers-graph)
         sorted-controllers   (filterv #(contains? controllers %) (dep/topo-sort controllers-graph))
         isolated-controllers (->> (keys controllers)
-                               (filter #(not (contains? nodeset %))))]
+                                  (filter #(not (contains? nodeset %))))]
     (concat isolated-controllers sorted-controllers)))
 
 (defn unsubscribe! [app-state* controller-name sub-id]
@@ -167,40 +167,40 @@
 
 (defn prepare-controllers [controllers context]
   (->> controllers
-    (map (fn [[k v]] [k (merge context (ctrl/prep v))]))
-    (into {})))
+       (map (fn [[k v]] [k (merge context (ctrl/prep v))]))
+       (into {})))
 
 (defn prepare-apps [apps]
   (->> apps
-    (map (fn [[k v]] [k (update v :keechma.app/deps set)]))
-    (into {})))
+       (map (fn [[k v]] [k (update v :keechma.app/deps set)]))
+       (into {})))
 
 (defn register-controllers-app-index [app-state path controllers]
   (let [app-controllers (->> controllers (map (fn [[k _]] [k path])) (into {}))]
     (-> app-state
-      (assoc-in [:app->controllers-index path] (set (keys controllers)))
-      (update :controller->app-index #(merge % app-controllers)))))
+        (assoc-in [:app->controllers-index path] (set (keys controllers)))
+        (update :controller->app-index #(merge % app-controllers)))))
 
 (defn deregister-controllers-app-index [app-state path controller-names]
   (-> app-state
-    (dissoc-in [:app->controllers-index path])
-    (update :controller->app-index #(apply dissoc % controller-names))))
+      (dissoc-in [:app->controllers-index path])
+      (update :controller->app-index #(apply dissoc % controller-names))))
 
 (defn validate-controllers-on-app-register! [controllers existing-controllers path]
   (let [errors
         (reduce-kv
-          (fn [acc k _]
-            (if (contains? existing-controllers k)
-              (update acc k conj {:keechma.anomalies/category :keechma.controller.errors/duplicate-name
-                                  :keechma.app/path path})
-              acc))
-          {}
-          controllers)]
+         (fn [acc k _]
+           (if (contains? existing-controllers k)
+             (update acc k conj {:keechma.anomalies/category :keechma.controller.errors/duplicate-name
+                                 :keechma.app/path path})
+             acc))
+         {}
+         controllers)]
     (when-not (empty? errors)
       (throw (keechma-ex-info
-               "Invalid controllers"
-               :keechma.controllers.errors/invalid
-               {:keeechma.controllers/invalid errors})))))
+              "Invalid controllers"
+              :keechma.controllers.errors/invalid
+              {:keeechma.controllers/invalid errors})))))
 
 (defn register-app [app-state {:keys [path controllers] :as app-ctx}]
 
@@ -208,9 +208,9 @@
   (validate-controllers-on-app-register! controllers (:controllers app-state) path)
 
   (-> app-state
-    (assoc-in (get-app-store-path path) app-ctx)
-    (update :controllers merge controllers)
-    (register-controllers-app-index path controllers)))
+      (assoc-in (get-app-store-path path) app-ctx)
+      (update :controllers merge controllers)
+      (register-controllers-app-index path controllers)))
 
 (defn deregister-app [app-state path]
   (let [app-store-path     (get-app-store-path path)
@@ -218,46 +218,46 @@
         controller-names   (set (keys (:controllers app-ctx)))
         remove-controllers #(apply dissoc % controller-names)]
     (-> app-state
-      (dissoc-in app-store-path)
-      (update :controllers remove-controllers)
-      (update :app-db remove-controllers)
-      (deregister-controllers-app-index path controller-names)
-      (update-in [:transaction :dirty] set/difference controller-names))))
+        (dissoc-in app-store-path)
+        (update :controllers remove-controllers)
+        (update :app-db remove-controllers)
+        (deregister-controllers-app-index path controller-names)
+        (update-in [:transaction :dirty] set/difference controller-names))))
 
 (defn dissoc-keechma-keys [app]
   (reduce-kv
-    (fn [m k v]
-      (let [ns             (str (when (keyword? k) (namespace k)))
-            is-keechma-key (or (str/starts-with? ns "keechma.") (= "keechma" ns))]
-        (if is-keechma-key
-          m
-          (assoc m k v))))
-    {}
-    app))
+   (fn [m k v]
+     (let [ns             (str (when (keyword? k) (namespace k)))
+           is-keechma-key (or (str/starts-with? ns "keechma.") (= "keechma" ns))]
+       (if is-keechma-key
+         m
+         (assoc m k v))))
+   {}
+   app))
 
 (defn validate-controllers! [controllers ancestor-controllers visible-controllers]
   (let [errors
         (reduce-kv
-          (fn [acc k v]
-            (let [deps (:keechma.controller/deps v)
-                  visible-controllers' (disj visible-controllers k)
-                  missing-deps (set/difference (set deps) visible-controllers')]
-              (cond
-                (contains? ancestor-controllers k)
-                (update acc k conj {:keechma.anomalies/category :keechma.controller.errors/duplicate-name})
+         (fn [acc k v]
+           (let [deps (:keechma.controller/deps v)
+                 visible-controllers' (disj visible-controllers k)
+                 missing-deps (set/difference (set deps) visible-controllers')]
+             (cond
+               (contains? ancestor-controllers k)
+               (update acc k conj {:keechma.anomalies/category :keechma.controller.errors/duplicate-name})
 
-                (seq missing-deps)
-                (update acc k conj {:keechma.anomalies/category :keechma.controller.errors/missing-deps
-                                    :keechma.controller/missing-deps missing-deps})
+               (seq missing-deps)
+               (update acc k conj {:keechma.anomalies/category :keechma.controller.errors/missing-deps
+                                   :keechma.controller/missing-deps missing-deps})
 
-                :else acc)))
-          {}
-          controllers)]
+               :else acc)))
+         {}
+         controllers)]
     (when-not (empty? errors)
       (throw (keechma-ex-info
-               "Invalid controllers"
-               :keechma.controllers.errors/invalid
-               {:keeechma.controllers/invalid errors})))))
+              "Invalid controllers"
+              :keechma.controllers.errors/invalid
+              {:keeechma.controllers/invalid errors})))))
 
 (defn make-ctx
   [app {:keys [context] :as initial-ctx}]
@@ -271,13 +271,13 @@
     (validate-controllers! controllers ancestor-controllers visible-controllers)
 
     (merge
-      initial-ctx
-      {:keechma/apps         apps
-       :controllers          controllers
-       :context              context'
-       :visible-controllers  visible-controllers
-       :controllers-graph    controllers-graph
-       :apps                 nil})))
+     initial-ctx
+     {:keechma/apps         apps
+      :controllers          controllers
+      :context              context'
+      :visible-controllers  visible-controllers
+      :controllers-graph    controllers-graph
+      :apps                 nil})))
 
 (defn assoc-empty-transaction [app-state]
   (assoc app-state :transaction {:dirty #{} :dirty-meta #{}}))
@@ -353,49 +353,49 @@
         id          (keyword (gensym 'controller-instance-))]
 
     (assert (isa? controller-type :keechma/controller)
-      (str "Controller " controller-name " has type " controller-type " which is not derived from :keechma/controller"))
+            (str "Controller " controller-name " has type " controller-type " which is not derived from :keechma/controller"))
 
     (assoc controller
-      :keechma.controller/type controller-type
-      :keechma.controller/name controller-name
-      :keechma.controller/params params
-      :keechma.controller/id id
-      :keechma/app (reify
-                     IAppInstance
-                     (-dispatch [_ controller-name event]
-                       (-dispatch app-state* controller-name event nil))
-                     (-dispatch [_ controller-name event payload]
-                       (-dispatch app-state* controller-name event payload))
-                     (-broadcast [_ event]
-                       (-broadcast app-state* event nil))
-                     (-broadcast [_ event payload]
-                       (-broadcast app-state* event payload))
-                     (-call [_ target-controller-name api-fn args]
-                       (let [controller-running-deps-map (get-controller-running-deps-map @app-state* controller-name)
-                             deps-name->renamed (set/map-invert controller-running-deps-map)
-                             real-target-controller-name (get deps-name->renamed target-controller-name)]
-                         (if (not real-target-controller-name)
-                           (let [controller (get-in @app-state* [:controllers target-controller-name])]
-                             (if (:keechma.controller/is-global controller)
-                               (apply -call app-state* target-controller-name api-fn args)
-                               (throw (keechma-ex-info
-                                        "Attempted to call an API function on non-existing dep"
-                                        :keechma.controller.deps/missing
-                                        {:keechma.controller.api/fn api-fn
-                                         :keechma.controller.api/args args
-                                         :keechma.controller/dep target-controller-name}))))
-                           (apply -call app-state* real-target-controller-name api-fn args))))
-                     (-get-api* [_ controller-name]
-                       (-get-api* app-state* controller-name))
-                     (-transact [_ transaction]
-                       (-transact app-state* transaction))
-                     (-get-id [_]
-                       (:keechma.app/id @app-state*)))
-      :meta-state* meta-state*
-      :state* state*
-      :deps-state* (reify
-                     IDeref
-                     (-deref [_] (get-controller-derived-deps-state @app-state* controller-name))))))
+           :keechma.controller/type controller-type
+           :keechma.controller/name controller-name
+           :keechma.controller/params params
+           :keechma.controller/id id
+           :keechma/app (reify
+                          IAppInstance
+                          (-dispatch [_ controller-name event]
+                            (-dispatch app-state* controller-name event nil))
+                          (-dispatch [_ controller-name event payload]
+                            (-dispatch app-state* controller-name event payload))
+                          (-broadcast [_ event]
+                            (-broadcast app-state* event nil))
+                          (-broadcast [_ event payload]
+                            (-broadcast app-state* event payload))
+                          (-call [_ target-controller-name api-fn args]
+                            (let [controller-running-deps-map (get-controller-running-deps-map @app-state* controller-name)
+                                  deps-name->renamed (set/map-invert controller-running-deps-map)
+                                  real-target-controller-name (get deps-name->renamed target-controller-name)]
+                              (if (not real-target-controller-name)
+                                (let [controller (get-in @app-state* [:controllers target-controller-name])]
+                                  (if (:keechma.controller/is-global controller)
+                                    (apply -call app-state* target-controller-name api-fn args)
+                                    (throw (keechma-ex-info
+                                            "Attempted to call an API function on non-existing dep"
+                                            :keechma.controller.deps/missing
+                                            {:keechma.controller.api/fn api-fn
+                                             :keechma.controller.api/args args
+                                             :keechma.controller/dep target-controller-name}))))
+                                (apply -call app-state* real-target-controller-name api-fn args))))
+                          (-get-api* [_ controller-name]
+                            (-get-api* app-state* controller-name))
+                          (-transact [_ transaction]
+                            (-transact app-state* transaction))
+                          (-get-id [_]
+                            (:keechma.app/id @app-state*)))
+           :meta-state* meta-state*
+           :state* state*
+           :deps-state* (reify
+                          IDeref
+                          (-deref [_] (get-controller-derived-deps-state @app-state* controller-name))))))
 
 (defn notify-subscriptions-meta
   ([app-state] (notify-subscriptions-meta app-state nil))
@@ -436,11 +436,11 @@
         state      (deref (:state* instance))
         deps-state (get-controller-derived-deps-state app-state controller-name)
         new-app-db
-                   (-> app-db
-                     (dissoc-in [controller-name :events-buffer])
-                     (assoc-in [controller-name :state] state)
-                     (assoc-in [controller-name :derived-state]
-                       (ctrl/derive-state instance state deps-state)))]
+        (-> app-db
+            (dissoc-in [controller-name :events-buffer])
+            (assoc-in [controller-name :state] state)
+            (assoc-in [controller-name :derived-state]
+                      (ctrl/derive-state instance state deps-state)))]
     (swap! app-state* assoc :app-db new-app-db)))
 
 (defn sync-controller-meta->app-db! [app-state* controller-name]
@@ -563,41 +563,41 @@
         prev-produced-keys (get-in app-db [controller-name :produced-keys])
         factory-deps       (:keechma.controller/deps config)
         produced
-                           (->> (get-factory-produced @app-state* controller-name)
-                             (reduce
-                               (fn [acc [k produced-config]]
-                                 (let [produced-controller-name  (conj controller-name k)
-                                       conformed-produced-config (conform-factory-produced produced-config)
-                                       factory-produced-deps     (:keechma.controller/deps conformed-produced-config)]
-                                   (assert (factory-produced-deps-valid? app-db factory-deps factory-produced-deps))
-                                   (assoc!
-                                     acc
-                                     (conj controller-name k)
-                                     (-> (merge config conformed-produced-config)
-                                       (assoc :keechma.controller/variant :identity
-                                              :keechma.controller/name produced-controller-name
-                                              :keechma.controller/factory controller-name)))))
-                               (transient {}))
-                             persistent!)
+        (->> (get-factory-produced @app-state* controller-name)
+             (reduce
+              (fn [acc [k produced-config]]
+                (let [produced-controller-name  (conj controller-name k)
+                      conformed-produced-config (conform-factory-produced produced-config)
+                      factory-produced-deps     (:keechma.controller/deps conformed-produced-config)]
+                  (assert (factory-produced-deps-valid? app-db factory-deps factory-produced-deps))
+                  (assoc!
+                   acc
+                   (conj controller-name k)
+                   (-> (merge config conformed-produced-config)
+                       (assoc :keechma.controller/variant :identity
+                              :keechma.controller/name produced-controller-name
+                              :keechma.controller/factory controller-name)))))
+              (transient {}))
+             persistent!)
         produced-keys      (set (keys produced))
         running-keys       (->> @app-state*
-                             :app-db
-                             (filter (fn [[k v]] (and (contains? prev-produced-keys k) (= :running (:phase v)))))
-                             (map first)
-                             set)
+                                :app-db
+                                (filter (fn [[k v]] (and (contains? prev-produced-keys k) (= :running (:phase v)))))
+                                (map first)
+                                set)
         to-remove          (set/difference running-keys produced-keys)]
 
     (doseq [controller-name to-remove]
       (controller-stop! app-state* controller-name))
 
     (swap! app-state*
-      (fn [app-state]
-        (let [{:keys [controllers app-db]} app-state
-              app-db'      (-> (apply dissoc app-db to-remove)
-                             (assoc-in [controller-name :produced-keys] produced-keys))
-              controllers' (-> (apply dissoc controllers to-remove)
-                             (merge produced))]
-          (assoc app-state :app-db app-db' :controllers controllers'))))
+           (fn [app-state]
+             (let [{:keys [controllers app-db]} app-state
+                   app-db'      (-> (apply dissoc app-db to-remove)
+                                    (assoc-in [controller-name :produced-keys] produced-keys))
+                   controllers' (-> (apply dissoc controllers to-remove)
+                                    (merge produced))]
+               (assoc app-state :app-db app-db' :controllers controllers'))))
 
     (loop [produced-keys' produced-keys]
       (when (seq produced-keys')
@@ -640,13 +640,13 @@
         apps-definitions (:keechma/apps app-ctx)
         apps-by-should-run
         (reduce-kv
-          (fn [acc app-name app]
-            (let [should-run? (:keechma.app/should-run? app)
-                  deps        (get-derived-deps-state app-state (:controllers app-state) (:keechma.app/deps app))]
-              (update acc (boolean (should-run? deps)) conj app-name)))
-          {true #{} false #{}}
-          apps-definitions)]
-    
+         (fn [acc app-name app]
+           (let [should-run? (:keechma.app/should-run? app)
+                 deps        (get-derived-deps-state app-state (:controllers app-state) (:keechma.app/deps app))]
+             (update acc (boolean (should-run? deps)) conj app-name)))
+         {true #{} false #{}}
+         apps-definitions)]
+
     (doseq [app-name (get apps-by-should-run false)]
       (stop-app! app-state* (conj path app-name)))
 
@@ -722,8 +722,8 @@
         app-state* (atom (-> {:batcher           batcher
                               :keechma.app/state ::running
                               :keechma.app/id    app-id}
-                           (assoc-empty-transaction)
-                           (register-app ctx)))]
+                             (assoc-empty-transaction)
+                             (register-app ctx)))]
 
     (reconcile-initial! app-state* [])
 
@@ -761,14 +761,14 @@
           (partial unsubscribe-meta! app-state* controller-name sub-id)))
       (-get-derived-state [_]
         (->> @app-state*
-          :app-db
-          (map (fn [[k v]]
-                 (when
-                   (and (not (and (vector? k) (= 1 (count k))))
-                     (:instance v))
-                   [k (:derived-state v)])))
-          (filter identity)
-          (into {})))
+             :app-db
+             (map (fn [[k v]]
+                    (when
+                     (and (not (and (vector? k) (= 1 (count k))))
+                          (:instance v))
+                      [k (:derived-state v)])))
+             (filter identity)
+             (into {})))
       (-get-derived-state [_ controller-name]
         (get-in @app-state* [:app-db controller-name :derived-state]))
       (-get-meta-state [_ controller-name]
@@ -847,7 +847,7 @@
 
 (defn get-running-controllers
   "Returns a map of running controllers. Useful for debugging."
-   [app-instance]
+  [app-instance]
   (let [app-state* (get-app-state* app-instance)
         app-state  @app-state*]
     (:app-db app-state)))

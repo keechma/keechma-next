@@ -3,13 +3,13 @@
 (defn get-dirty-deps [prev-deps next-deps]
   (let [dirty
         (reduce
-          (fn [m k]
-            (let [v (get next-deps k)]
-              (if-not (identical? v (get prev-deps k))
-                (assoc m k v)
-                m)))
-          {}
-          (set (concat (keys prev-deps) (keys next-deps))))]
+         (fn [m k]
+           (let [v (get next-deps k)]
+             (if-not (identical? v (get prev-deps k))
+               (assoc m k v)
+               m)))
+         {}
+         (set (concat (keys prev-deps) (keys next-deps))))]
     (if (empty? dirty)
       nil
       dirty)))
@@ -46,10 +46,10 @@
 (defn get-lowest-common-ancestor-for-paths [paths]
   (let [[f & r] (reverse (sort paths))]
     (reduce
-      (fn [acc v]
-        (let [common-subvec (find-common-subvec acc v)]
-          (if (= [] common-subvec)
-            (reduced [])
-            common-subvec)))
-      f
-      r)))
+     (fn [acc v]
+       (let [common-subvec (find-common-subvec acc v)]
+         (if (= [] common-subvec)
+           (reduced [])
+           common-subvec)))
+     f
+     r)))

@@ -1,8 +1,8 @@
 (ns keechma.next.util-test
   (:require
-    [cljs.test :refer-macros [deftest is testing use-fixtures async]]
-    [cljs.pprint :as pprint]
-    [keechma.next.util :refer [get-lowest-common-ancestor-for-paths]]))
+   [cljs.test :refer-macros [deftest is testing use-fixtures async]]
+   [cljs.pprint :as pprint]
+   [keechma.next.util :refer [get-lowest-common-ancestor-for-paths]]))
 
 (deftest lowest-common-ancestor-for-paths
   (is (= [] (get-lowest-common-ancestor-for-paths [[] [:foo] [:bar] [:foo :bar :baz] [:bar :baz :qux] [:bar :baz]])))

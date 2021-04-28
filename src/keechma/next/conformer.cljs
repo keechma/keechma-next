@@ -14,17 +14,17 @@
   (if (fn? (:keechma.controller/params controller-def)) :dynamic :static))
 
 (>defn get-deps-map [deps]
-  [:keechma.controller.deps/input => :keechma.controller/dep-map]
-  (if (map? deps)
-    deps
-    (let [deps-maps (reduce
-                      (fn [acc v]
-                        (if (map? v)
-                          (conj acc v)
-                          (conj acc {v v})))
-                      []
-                      deps)]
-      (apply merge deps-maps))))
+       [:keechma.controller.deps/input => :keechma.controller/dep-map]
+       (if (map? deps)
+         deps
+         (let [deps-maps (reduce
+                          (fn [acc v]
+                            (if (map? v)
+                              (conj acc v)
+                              (conj acc {v v})))
+                          []
+                          deps)]
+           (apply merge deps-maps))))
 
 (defn conform-deps [controller]
   (let [deps (:keechma.controller/deps controller)]
@@ -32,7 +32,7 @@
       (let [deps-map (get-deps-map deps)
             renamed-deps (into {} (filter (fn [[k v]] (not= k v)) deps-map))]
         (assoc controller :keechma.controller/deps (vec (keys deps-map))
-                          :keechma.controller.deps/renamed renamed-deps))
+               :keechma.controller.deps/renamed renamed-deps))
       (dissoc controller :keechma.controller/deps))))
 
 (defn conform-controller [[controller-name controller-def]]
@@ -47,8 +47,8 @@
 
 (defn conform-controllers [controllers]
   (->> controllers
-    (map conform-controller)
-    (into {})))
+       (map conform-controller)
+       (into {})))
 
 (defn conform-app [[app-name app-def]]
   (let [app-variant (if (contains? app-def :keechma.app/load) :dynamic :static)]
@@ -60,15 +60,15 @@
 
 (defn conform-apps [apps]
   (->> apps
-    (map conform-app)
-    (into {})))
+       (map conform-app)
+       (into {})))
 
 (>defn conform [app]
-  [any? => :keechma/app]
-  (-> app
-    (update :keechma/controllers conform-controllers)
-    (update :keechma/apps conform-apps)))
+       [any? => :keechma/app]
+       (-> app
+           (update :keechma/controllers conform-controllers)
+           (update :keechma/apps conform-apps)))
 
 (>defn conform-factory-produced [controller-def]
-  [any? => :keechma.controller.factory/produced]
-  (assoc controller-def :keechma.controller.params/variant (get-params-variant controller-def)))
+       [any? => :keechma.controller.factory/produced]
+       (assoc controller-def :keechma.controller.params/variant (get-params-variant controller-def)))

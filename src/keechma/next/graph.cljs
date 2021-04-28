@@ -4,10 +4,10 @@
 
 (defn cleanup-dependencies [nodes dependencies]
   (reduce-kv
-    (fn [m k v]
-      (assoc m k (set/intersection v nodes)))
-    {}
-    dependencies))
+   (fn [m k v]
+     (assoc m k (set/intersection v nodes)))
+   {}
+   dependencies))
 
 (defn subgraph-reachable-from-set [g start-nodes]
   (let [start-nodes' (set start-nodes)
