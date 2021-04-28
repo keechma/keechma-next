@@ -634,30 +634,33 @@
         {:keys [controllers-graph]} (get-in app-state (get-app-store-path path))
         subgraph     (subgraph-reachable-from-set controllers-graph dirty)
         ;; TODO: Write test for this. Only reconcile controllers that belong to this app
-        to-reconcile (filterv #(= path (get-in app-state [:controller->app-index %])) (dep/topo-sort subgraph))]
+        to-reconcile (filterv #(= path (get-in app-state [:controller->app-index %])) (dep/topo-sort subgraph))
+        app-state        @app-state*
+        app-ctx          (get-in app-state (get-app-store-path path))
+        apps-definitions (:keechma/apps app-ctx)
+        apps-by-should-run
+        (reduce-kv
+          (fn [acc app-name app]
+            (let [should-run? (:keechma.app/should-run? app)
+                  deps        (get-derived-deps-state app-state (:controllers app-state) (:keechma.app/deps app))]
+              (update acc (boolean (should-run? deps)) conj app-name)))
+          {true #{} false #{}}
+          apps-definitions)]
+    
+    (doseq [app-name (get apps-by-should-run false)]
+      (stop-app! app-state* (conj path app-name)))
+
     (reconcile-controllers! app-state* to-reconcile)
-    (let [app-state        @app-state*
-          app-ctx          (get-in app-state (get-app-store-path path))
-          apps-definitions (:keechma/apps app-ctx)
-          apps-by-should-run
-                           (reduce-kv
-                             (fn [acc app-name app]
-                               (let [should-run? (:keechma.app/should-run? app)
-                                     deps        (get-derived-deps-state app-state (:controllers app-state) (:keechma.app/deps app))]
-                                 (update acc (boolean (should-run? deps)) conj app-name)))
-                             {true #{} false #{}}
-                             apps-definitions)]
-      (doseq [app-name (get apps-by-should-run false)]
-        (stop-app! app-state* (conj path app-name)))
-      (doseq [app-name (get apps-by-should-run true)]
-        (let [app-state     @app-state*
-              path          (conj path app-name)
-              child-app-ctx (get-in app-state (get-app-store-path path))]
-          (if (:is-running child-app-ctx)
-            (reconcile-app! app-state* path (set/union dirty (get-in app-state [:transaction :dirty]) (set to-reconcile)))
-            (do
-              (swap! app-state* register-app (make-ctx (get apps-definitions app-name) (merge app-ctx {:path path :is-running true})))
-              (reconcile-initial! app-state* path))))))))
+
+    (doseq [app-name (get apps-by-should-run true)]
+      (let [app-state     @app-state*
+            path          (conj path app-name)
+            child-app-ctx (get-in app-state (get-app-store-path path))]
+        (if (:is-running child-app-ctx)
+          (reconcile-app! app-state* path (set/union dirty (get-in app-state [:transaction :dirty]) (set to-reconcile)))
+          (do
+            (swap! app-state* register-app (make-ctx (get apps-definitions app-name) (merge app-ctx {:path path :is-running true})))
+            (reconcile-initial! app-state* path)))))))
 
 (defn reconcile-after-transaction! [app-state*]
   (when (not (transacting?))
