@@ -1266,6 +1266,8 @@
 (derive :router :keechma/controller)
 (derive :offers :keechma/controller)
 (derive :profile :keechma/controller)
+(derive :profile-app-should-run? :keechma/controller)
+(derive :profile-details :keechma/controller)
 
 (defmethod ctrl/start :router [_ _ _ _]
   {:page "offers"})
@@ -1291,29 +1293,45 @@
 (defmethod ctrl/handle :profile [ctrl cmd _]
   (log-cmd! ctrl cmd))
 
+(defmethod ctrl/derive-state :profile-app-should-run? [ctrl state {:keys [router]}]
+  (= "profile" (:page router)))
+
+(defmethod ctrl/handle :profile-details [ctrl cmd _]
+  (log-cmd! ctrl cmd))
+
+;; Testing reconciliation behavior with sub apps.
+;; - First all controllers in the parent app are reconciled
+;; - Then any sub apps are stopped (based on their :keechma.app/should-run? fn)
+;; - Then any sub apps are started (based on their :keechma.app/should-run? fn)
 (deftest subapps-stop-start-lifecycle
   (let [cmd-log* (atom [])
         app {:keechma/controllers {:router {:keechma.controller/params true
                                             :cmd-log* cmd-log*}
                                    :profile {:keechma.controller/params (fn [{:keys [router]}] (= "profile" (:page router)))
                                              :keechma.controller/deps [:router]
-                                             :cmd-log* cmd-log*}}
+                                             :cmd-log* cmd-log*}
+                                   :profile-app-should-run? {:keechma.controller/params true
+                                                             :keechma.controller/deps [:router]}}
              :keechma/apps {:offers {:keechma/controllers {:offers {:keechma.controller/params true
                                                                     :keechma.controller/deps [:router]
                                                                     :cmd-log* cmd-log*}}
                                      :keechma.app/should-run? (fn [{:keys [router]}] (= "offers" (:page router)))
-                                     :keechma.app/deps [:router]}}}
+                                     :keechma.app/deps [:router]}
+                            :profile {:keechma.app/should-run? #(:profile-app-should-run? %)
+                                      :keechma.app/deps [:profile-app-should-run?]
+                                      :keechma/controllers {:profile-details {:keechma.controller/params true
+                                                                              :cmd-log* cmd-log*}}}}}
         app-instance (start! app)]
 
     (dispatch app-instance :router :redirect {:page "profile"})
     (is (= [[:router :keechma.on/start]
             [:offers :keechma.on/start]
             [:router :redirect]
+            [:profile :keechma.on/start]
             [:offers :keechma.on/stop]
-            [:profile :keechma.on/start]]
+            [:profile-details :keechma.on/start]]
            @cmd-log*))
     (stop! app-instance)))
-
 
 (deftest stop-start-lifecycle
   (let [cmd-log* (atom [])
