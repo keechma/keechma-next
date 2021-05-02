@@ -1022,6 +1022,20 @@
     (is (= ::dynamic-child-1 (get-derived-state app-instance ::dynamic-child)))
     (stop! app-instance)))
 
+(derive ::dynamic-controller :keechma/controller)
+
+(defmethod ctrl/prep ::dynamic-controller [ctrl]
+  (assoc ctrl :answer 41))
+
+(defmethod ctrl/start ::dynamic-controller [ctrl _ _]
+  (-> ctrl :answer inc))
+
+(deftest dynamic-controller-type-calls-prep-correctly
+  (let [app {:keechma/controllers
+             {::dynamic-controller {:keechma.controller/params true
+                                    :keechma.controller/type (constantly ::dynamic-controller)}}}
+        app-instance (start! app)]
+    (is (= 42 (get-derived-state app-instance ::dynamic-controller)))))
 
 (derive ::deps-renaming-parent-1 :keechma/controller)
 (derive ::deps-renaming-parent-2 :keechma/controller)

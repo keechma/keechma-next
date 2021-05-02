@@ -339,15 +339,18 @@
        (app-broadcast app-state* [] event payload))
      (reconcile-after-transaction! app-state*))))
 
-(defn get-controller-type [controller params]
+(defn concretize-controller-type [controller params]
   (let [controller-type (:keechma.controller/type controller)]
     (if (fn? controller-type)
-      (controller-type params)
-      controller-type)))
+      (-> controller
+          (assoc :keechma.controller/type (controller-type params))
+          ctrl/prep)
+      controller)))
 
 (defn make-controller-instance [app-state* controller-name params]
-  (let [controller  (get-in @app-state* [:controllers controller-name])
-        controller-type (get-controller-type controller params)
+  (let [controller  (-> (get-in @app-state* [:controllers controller-name])
+                        (concretize-controller-type params))
+        controller-type (:keechma.controller/type controller)
         state*      (atom nil)
         meta-state* (atom nil)
         id          (keyword (gensym 'controller-instance-))]
@@ -356,7 +359,6 @@
             (str "Controller " controller-name " has type " controller-type " which is not derived from :keechma/controller"))
 
     (assoc controller
-           :keechma.controller/type controller-type
            :keechma.controller/name controller-name
            :keechma.controller/params params
            :keechma.controller/id id
