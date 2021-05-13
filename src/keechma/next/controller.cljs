@@ -5,7 +5,7 @@
 
 (defn controller-dispatcher
   "Dispatcher for controller multimethods that receive the controller config map as it's first argument. Returns the
-  value of the `:keechma/controller` key in the first argument"
+  value of the `:keechma.controller/type` key from the controller map (passed in as the first argument)."
   [c & _]
   (:keechma.controller/type c))
 
@@ -16,6 +16,10 @@
 
 (defmulti prep
   "Prep is called once when the app is started (for each controller). It will receive the controller map as it's only argument. It should return a new controller config. This allows you to prep the map for all controller instances that could be created during the app's lifetime."
+  controller-dispatcher)
+
+(defmulti params
+  "Params is called before controller is started. It can be used to validate or process value returned from the `:keechma.controller/params` key in the application map. It will receive the controller map (as returned from the `keechma.next.controller/prep` function) and params as the arguments. This function will be called only if the value returned from `:keecma.controller/params` is truthy. If this function returns a falsy value, the controller will not be started."
   controller-dispatcher)
 
 (defmulti init
@@ -48,6 +52,9 @@
 
 (defmethod prep :default [controller]
   controller)
+
+(defmethod params :default [controller params]
+  params)
 
 (defmethod api :default [controller])
 

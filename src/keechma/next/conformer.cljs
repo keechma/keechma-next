@@ -13,6 +13,9 @@
 (defn get-params-variant [controller-def]
   (if (fn? (:keechma.controller/params controller-def)) :dynamic :static))
 
+(defn get-type-variant [controller-def]
+  (if (fn? (:keechma.controller/type controller-def)) :dynamic :static))
+
 (>defn get-deps-map [deps]
        [:keechma.controller.deps/input => :keechma.controller/dep-map]
        (if (map? deps)
@@ -37,11 +40,13 @@
 
 (defn conform-controller [[controller-name controller-def]]
   (let [controller-variant (get-controller-variant controller-name)
-        params-variant (get-params-variant controller-def)]
+        params-variant (get-params-variant controller-def)
+        type-variant (get-type-variant controller-def)]
     [controller-name
      (cond-> controller-def
        true (update :keechma.controller/type #(or % (if (vector? controller-name) (first controller-name) controller-name)))
        true (assoc :keechma.controller/variant controller-variant)
+       true (assoc :keechma.controller.type/variant type-variant)
        true conform-deps
        (not= :factory controller-variant) (assoc :keechma.controller.params/variant params-variant))]))
 
