@@ -803,28 +803,32 @@
                         {:keechma.controller/params true
                          :keechma.controller/type :counter-1
                          :keechma.controller/variant :singleton
-                         :keechma.controller.params/variant :static}
+                         :keechma.controller.params/variant :static
+                         :keechma.controller.type/variant :static}
                         [:counter-2]
                         {:keechma.controller.factory/produce
                          noop
                          :keechma.controller/deps [:counter-1]
                          :keechma.controller/type :counter-2
                          :keechma.controller/variant :factory
-                         :keechma.controller.deps/renamed {}}
+                         :keechma.controller.deps/renamed {}
+                         :keechma.controller.type/variant :static}
                         [:counter-2 :foo]
                         {:keechma.controller/params noop
                          :keechma.controller/deps [:counter-1]
                          :keechma.controller/type :counter-2
                          :keechma.controller/variant :identity
                          :keechma.controller.deps/renamed {}
-                         :keechma.controller.params/variant :dynamic}
+                         :keechma.controller.params/variant :dynamic
+                         :keechma.controller.type/variant :static}
                         :current-user
                         {:keechma.controller/params noop
                          :keechma.controller/deps [:counter-1]
                          :keechma.controller/type :current-user
                          :keechma.controller/variant :singleton
                          :keechma.controller.deps/renamed {}
-                         :keechma.controller.params/variant :dynamic}}
+                         :keechma.controller.params/variant :dynamic
+                         :keechma.controller.type/variant :static}}
                        :keechma/apps
                        {:public
                         {:keechma/controllers
@@ -832,7 +836,8 @@
                           {:keechma.controller/params true
                            :keechma.controller/type :public-posts
                            :keechma.controller/variant :singleton
-                           :keechma.controller.params/variant :static}}
+                           :keechma.controller.params/variant :static
+                           :keechma.controller.type/variant :static}}
                          :keechma.app/should-run? noop
                          :keechma.app/deps [:user-role]
                          :keechma.app/variant :static}
@@ -847,7 +852,8 @@
                           {:keechma.controller/params true
                            :keechma.controller/type :user-posts
                            :keechma.controller/variant :singleton
-                           :keechma.controller.params/variant :static}}
+                           :keechma.controller.params/variant :static
+                           :keechma.controller.type/variant :static}}
                          :keechma.app/should-run? noop
                          :keechma.app/deps [:user-role]
                          :keechma.app/variant :static}
@@ -859,21 +865,24 @@
                            :keechma.controller/type :user-role-tracker
                            :keechma.controller/variant :singleton
                            :keechma.controller.deps/renamed {}
-                           :keechma.controller.params/variant :static}
+                           :keechma.controller.params/variant :static
+                           :keechma.controller.type/variant :static}
                           :user-role-tracker-guest
                           {:keechma.controller/params noop
                            :keechma.controller/deps [:user-role]
                            :keechma.controller/type :user-role-tracker
                            :keechma.controller/variant :singleton
                            :keechma.controller.deps/renamed {}
-                           :keechma.controller.params/variant :dynamic}
+                           :keechma.controller.params/variant :dynamic
+                           :keechma.controller.type/variant :static}
                           :user-role-tracker-user
                           {:keechma.controller/params noop
                            :keechma.controller/deps [:user-role]
                            :keechma.controller/type :user-role-tracker
                            :keechma.controller/variant :singleton
                            :keechma.controller.deps/renamed {}
-                           :keechma.controller.params/variant :dynamic}}
+                           :keechma.controller.params/variant :dynamic
+                           :keechma.controller.type/variant :static}}
                          :keechma.app/should-run? noop
                          :keechma.app/deps [:user-role]
                          :keechma.app/variant :static}}}]
@@ -939,6 +948,7 @@
              :deps-state*
              :state*
              :keechma.controller.params/variant
+             :keechma.controller.type/variant
              :main-context}
            @log-1*))
 
@@ -955,6 +965,7 @@
              :deps-state*
              :state*
              :keechma.controller.params/variant
+             :keechma.controller.type/variant
              :main-context
              :test-context}
            @log-2*))
@@ -1013,7 +1024,7 @@
              {::dynamic-parent {:keechma.controller/params true}
               ::dynamic-child {:keechma.controller/deps [::dynamic-parent]
                                :keechma.controller/params #(::dynamic-parent %)
-                               :keechma.controller/type #(if (even? %) ::dynamic-child-1 ::dynamic-child-2)}}}
+                               :keechma.controller/type #(if (even? (::dynamic-parent %)) ::dynamic-child-1 ::dynamic-child-2)}}}
         app-instance (start! app)]
     (is (= ::dynamic-child-1 (get-derived-state app-instance ::dynamic-child)))
     (dispatch app-instance ::dynamic-parent :inc)
@@ -1036,6 +1047,24 @@
                                     :keechma.controller/type (constantly ::dynamic-controller)}}}
         app-instance (start! app)]
     (is (= 42 (get-derived-state app-instance ::dynamic-controller)))))
+
+(deftest factory-produced-controllers-with-dynamic-type
+  (let [app {:keechma/controllers
+             {::dynamic-parent {:keechma.controller/params true}
+              [::dynamic-child-1] {:keechma.controller/deps [::dynamic-parent]
+                                   :keechma.controller.factory/produce
+                                   (fn [deps]
+                                     (let [v (::dynamic-parent deps)]
+                                       {:instance {:keechma.controller/type (if (even? v) ::dynamic-child-1 ::dynamic-child-2)
+                                                   :keechma.controller/params true}}))}}}
+        app-instance (start! app)]
+
+    (is (= ::dynamic-child-1 (get-derived-state app-instance [::dynamic-child-1 :instance])))
+    (dispatch app-instance ::dynamic-parent :inc)
+    (is (= ::dynamic-child-2 (get-derived-state app-instance [::dynamic-child-1 :instance])))
+    (dispatch app-instance ::dynamic-parent :inc)
+    (is (= ::dynamic-child-1 (get-derived-state app-instance [::dynamic-child-1 :instance])))
+    (stop! app-instance)))
 
 (derive ::deps-renaming-parent-1 :keechma/controller)
 (derive ::deps-renaming-parent-2 :keechma/controller)
@@ -1249,6 +1278,14 @@
     (is (= [[::called {:baz :qux}]]
            (get-derived-state app-instance ::api-consumer-2)))))
 
+(deftest calling-api-from-controller-that-is-not-in-deps-should-throw
+  (let [app {:keechma/controllers {::api-provider {:keechma.controller/params true}
+                                   ::api-consumer-1 {:keechma.controller/params true
+                                                     :keechma.controller/type ::api-consumer
+                                                     :keechma.controller/deps []}}}
+        app-instance (start! app)]
+    (is (thrown? js/Error (dispatch app-instance ::api-consumer-1 :call {:foo :bar})))))
+
 (derive ::c1 :keechma/controller)
 (derive ::c2 :keechma/controller)
 
@@ -1367,5 +1404,42 @@
             [:profile :keechma.on/start]]
            @cmd-log*))
     (stop! app-instance)))
-;;; TODO: Write test to ensure that child apps are not reconciling parent controllers
+
+(derive ::with-params-parent :keechma/controller)
+(derive ::with-params :keechma/controller)
+
+(defmethod ctrl/start ::with-params-parent [_ _ _]
+  1)
+
+(defmethod ctrl/handle ::with-params-parent [{:keys [state*]} ev _]
+  (when (= :inc ev)
+    (swap! state* inc)))
+
+(defmethod ctrl/params ::with-params [_ params]
+  (when (even? params) params))
+
+(defmethod ctrl/start ::with-params [_ params _]
+  params)
+
+(deftest ctrl-params-1
+  (let [app {:keechma/controllers {::with-params-parent {:keechma.controller/params true}
+                                   ::with-params {:keechma.controller/deps [::with-params-parent]
+                                                  :keechma.controller/params #(::with-params-parent %)}}}
+        app-instance (start! app)]
+    (is (= {::with-params-parent 1} (get-derived-state app-instance)))
+    (dispatch app-instance ::with-params-parent :inc)
+    (is (= {::with-params-parent 2
+            ::with-params 2} (get-derived-state app-instance)))
+    (dispatch app-instance ::with-params-parent :inc)
+    (is (= {::with-params-parent 3} (get-derived-state app-instance)))))
+
+(deftest ctrl-params-2
+  (let [app {:keechma/controllers {::with-params {:keechma.controller/params 1}}}
+        app-instance (start! app)]
+    (is (= {} (get-derived-state app-instance)))))
+
+(deftest ctrl-params-3
+  (let [app {:keechma/controllers {::with-params {:keechma.controller/params 2}}}
+        app-instance (start! app)]
+    (is (= {::with-params 2} (get-derived-state app-instance)))))
 
