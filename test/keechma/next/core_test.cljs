@@ -1443,3 +1443,16 @@
         app-instance (start! app)]
     (is (= {::with-params 2} (get-derived-state app-instance)))))
 
+(derive ::with-params-2 :keechma/controller)
+
+(defmethod ctrl/params ::with-params-2 [ctrl params]
+  (is (-> ctrl :keechma.controller/name boolean))
+  params)
+
+(defmethod ctrl/start ::with-params-2 [_ params _]
+  params)
+
+(deftest ctrl-params-has-access-to-controller-name
+  (let [app {:keechma/controllers {::with-params-2 {:keechma.controller/params true}}}
+        app-instance (start! app)]
+    (is (= {::with-params-2 true} (get-derived-state app-instance)))))

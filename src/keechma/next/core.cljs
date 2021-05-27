@@ -365,7 +365,7 @@
                         (get-in [:controllers controller-name])
                         (assoc :keechma.controller/type controller-type)
                         prep)
-        params' (ctrl/params controller params)]
+        params' (ctrl/params (assoc controller :keechma.controller/name controller-name) params)]
 
     (when params'
       (let [state*      (atom nil)
