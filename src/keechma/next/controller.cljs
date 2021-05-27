@@ -85,7 +85,7 @@
 
 (defn broadcast
   "Broadcasts an event to all running controllers."
-  ([controller event] (dispatch controller event nil))
+  ([controller event] (broadcast controller event nil))
   ([controller event payload]
    (let [app (:keechma/app controller)]
      (protocols/-broadcast app event payload)
