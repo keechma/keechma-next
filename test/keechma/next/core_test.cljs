@@ -73,14 +73,18 @@
     (is (= {:counter-1 0 :counter-2 1} (get-derived-state app-instance)))
     (dispatch app-instance :counter-1 :inc)
     (is (= {:counter-1 1 :counter-2 2} (get-derived-state app-instance)))
+    (stop! app-instance)
     (is (= [[:counter-1 :keechma.lifecycle/start]
             [:counter-1 :keechma.on/start]
             [:counter-2 :keechma.lifecycle/start]
             [:counter-2 :keechma.on/start]
             [:counter-1 :inc]
-            [:counter-2 :keechma.on/deps-change]]
-           @cmd-log*))
-    (stop! app-instance)))
+            [:counter-2 :keechma.on/deps-change]
+            [:counter-2 :keechma.on/stop] 
+            ; where is  ?
+            ; [:counter-2 :keechma.lifecycle/stop] 
+            [:counter-1 :keechma.on/stop]]
+           @cmd-log*))))
 
 (deftest send-3
   (let [cmd-log* (atom [])
