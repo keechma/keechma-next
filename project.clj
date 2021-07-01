@@ -1,4 +1,4 @@
-(defproject keechma/next "0.1.2"
+(defproject keechma/next "0.1.3"
   :description "Data driven state management library for single page apps"
   :url "https://github.com/keechma/keechma-next"
   :license {:name "MIT License"
