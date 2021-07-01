@@ -495,7 +495,8 @@
   ;; and it will happen in the `make-controller-instance`. In that function, we'll assoc the real :keechma.controller/type for
   ;; the controllers with the dynamic type (fn based), and then the call `ctrl/params` function. If that function returns falsy value, we'll
   ;; abort the starting, and restore the app-state* to the previous state.
-  (let [prev-controller-state (get-in @app-state* [:app-db controller-name])]
+  (let [prev-controller-state (get-in @app-state* [:app-db controller-name])
+        prev-state (:state prev-controller-state)]
     (swap! app-state* assoc-in [:app-db controller-name] {:params params :type controller-type :phase :initializing :events-buffer []})
     (let [controller-instance (make-controller-instance app-state* controller-name controller-type params)]
       (if-not controller-instance
@@ -507,7 +508,6 @@
           (swap! app-state* assoc-in [:app-db controller-name :instance] instance)
           (let [state*      (:state* instance)
                 meta-state* (:meta-state* instance)
-                prev-state  (get-in @app-state* [:app-db controller-name :state])
                 deps-state  (get-controller-derived-deps-state @app-state* controller-name)
                 state       (ctrl/start instance params deps-state prev-state)]
             (reset! state* state)
@@ -530,9 +530,9 @@
     (remove-watch (:meta-state* instance) :keechma/app)
     (-dispatch app-state* controller-name :keechma.on/stop nil)
     (let [deps-state (get-controller-derived-deps-state @app-state* controller-name)
-          state      (ctrl/stop controller-name params @state* deps-state)]
-      (reset! state* state)
-      (swap! app-state* assoc-in [:app-db controller-name] {:state state}))
+          state      (ctrl/stop instance params @state* deps-state)] +
+         (reset! state* state)
+         (swap! app-state* assoc-in [:app-db controller-name] {:state state}))
     (ctrl/terminate instance)))
 
 (defn controller-on-deps-change! [app-state* controller-name]

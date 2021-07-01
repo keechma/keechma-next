@@ -73,14 +73,17 @@
     (is (= {:counter-1 0 :counter-2 1} (get-derived-state app-instance)))
     (dispatch app-instance :counter-1 :inc)
     (is (= {:counter-1 1 :counter-2 2} (get-derived-state app-instance)))
+    (stop! app-instance)
     (is (= [[:counter-1 :keechma.lifecycle/start]
             [:counter-1 :keechma.on/start]
             [:counter-2 :keechma.lifecycle/start]
             [:counter-2 :keechma.on/start]
             [:counter-1 :inc]
-            [:counter-2 :keechma.on/deps-change]]
-           @cmd-log*))
-    (stop! app-instance)))
+            [:counter-2 :keechma.on/deps-change]
+            [:counter-2 :keechma.on/stop]
+            [:counter-2 :keechma.lifecycle/stop]
+            [:counter-1 :keechma.on/stop]]
+           @cmd-log*))))
 
 (deftest send-3
   (let [cmd-log* (atom [])
@@ -127,14 +130,18 @@
             [[:counter-2 2] :keechma.on/start]
             [:counter-1 :inc]
             [[:counter-2 1] :keechma.on/stop]
+            [[:counter-2 1] :keechma.lifecycle/stop]
             [[:counter-2 2] :keechma.on/stop]
+            [[:counter-2 2] :keechma.lifecycle/stop]
             [[:counter-2 2] :keechma.lifecycle/start]
             [[:counter-2 2] :keechma.on/start]
             [[:counter-2 3] :keechma.lifecycle/start]
             [[:counter-2 3] :keechma.on/start]
             [:counter-1 :inc]
             [[:counter-2 2] :keechma.on/stop]
+            [[:counter-2 2] :keechma.lifecycle/stop]
             [[:counter-2 3] :keechma.on/stop]
+            [[:counter-2 3] :keechma.lifecycle/stop]
             [[:counter-2 3] :keechma.lifecycle/start]
             [[:counter-2 3] :keechma.on/start]
             [[:counter-2 4] :keechma.lifecycle/start]
@@ -167,11 +174,13 @@
             [[:counter-2 2] :keechma.on/start]
             [:counter-1 :inc]
             [[:counter-2 1] :keechma.on/stop]
+            [[:counter-2 1] :keechma.lifecycle/stop]
             [[:counter-2 2] :keechma.on/deps-change]
             [[:counter-2 3] :keechma.lifecycle/start]
             [[:counter-2 3] :keechma.on/start]
             [:counter-1 :inc]
             [[:counter-2 2] :keechma.on/stop]
+            [[:counter-2 2] :keechma.lifecycle/stop]
             [[:counter-2 3] :keechma.on/deps-change]
             [[:counter-2 4] :keechma.lifecycle/start]
             [[:counter-2 4] :keechma.on/start]]
@@ -1456,3 +1465,51 @@
   (let [app {:keechma/controllers {::with-params-2 {:keechma.controller/params true}}}
         app-instance (start! app)]
     (is (= {::with-params-2 true} (get-derived-state app-instance)))))
+
+(derive ::start-stop :keechma/controller)
+(derive ::start-stop-counter :keechma/controller)
+
+(def vec-conj (fnil conj []))
+
+(defmethod ctrl/start ::start-stop [ctrl params deps-state prev-state]
+  (vec-conj prev-state [:start deps-state]))
+
+(defmethod ctrl/stop ::start-stop [ctrl params state deps-state]
+  (vec-conj state [:stop deps-state]))
+
+(defmethod ctrl/handle ::start-stop-counter [{:keys [state*]} ev _]
+  (case ev
+    :inc (swap! state* inc)
+    :reset (reset! state* nil)
+    nil))
+
+(deftest ctrl-start-stop
+  (let [app {:keechma/controllers {::start-stop-counter #:keechma.controller{:params true}
+                                   ::start-stop #:keechma.controller{:params #(::start-stop-counter %)
+                                                                     :deps [::start-stop-counter]}}}
+        app-instance (start! app)]
+    (is (= {::start-stop-counter nil} (get-derived-state app-instance)))
+
+    (dispatch app-instance ::start-stop-counter :inc)
+    (is (= {::start-stop-counter 1
+            ::start-stop [[:start {::start-stop-counter 1}]]}
+           (get-derived-state app-instance)))
+
+    (dispatch app-instance ::start-stop-counter :inc)
+    (is (= {::start-stop-counter 2
+            ::start-stop [[:start {::start-stop-counter 1}]
+                          [:stop {::start-stop-counter 2}]
+                          [:start {::start-stop-counter 2}]]}
+           (get-derived-state app-instance)))
+
+    (dispatch app-instance ::start-stop-counter :reset)
+    (is (= {::start-stop-counter nil} (get-derived-state app-instance)))
+
+    (dispatch app-instance ::start-stop-counter :inc)
+    (is (= {::start-stop-counter 1
+            ::start-stop  [[:start {::start-stop-counter 1}]
+                           [:stop {::start-stop-counter 2}]
+                           [:start {::start-stop-counter 2}]
+                           [:stop {::start-stop-counter nil}]
+                           [:start {::start-stop-counter 1}]]}
+           (get-derived-state app-instance)))))
