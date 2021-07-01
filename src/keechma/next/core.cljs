@@ -530,7 +530,7 @@
     (remove-watch (:meta-state* instance) :keechma/app)
     (-dispatch app-state* controller-name :keechma.on/stop nil)
     (let [deps-state (get-controller-derived-deps-state @app-state* controller-name)
-          state      (ctrl/stop controller-name params @state* deps-state)]
+          state      (ctrl/stop instance params @state* deps-state)]
       (reset! state* state)
       (swap! app-state* assoc-in [:app-db controller-name] {:state state}))
     (ctrl/terminate instance)))
@@ -789,7 +789,7 @@
                     (when
                      (and (not (and (vector? k) (= 1 (count k))))
                           (:instance v))
-                      [k (:derived-state v)])))
+                     [k (:derived-state v)])))
              (filter identity)
              (into {})))
       (-get-derived-state [_ controller-name]
