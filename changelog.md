@@ -14,7 +14,7 @@
 
 ### Breaking
 
-- If you define `:keechma.controller/type` as a function, it will receive the deps map directly. Previously it was recevieing value of the `:keechma.controller/params` key.
+- If you define `:keechma.controller/type` as a function, it will receive the deps map directly. Previously it was receiving value of the `:keechma.controller/params` key.
 
 ### Added
 
