@@ -239,16 +239,17 @@
         (deregister-controllers-app-index path controller-names)
         (update-in [:transaction :dirty] set/difference controller-names))))
 
+(def keechma-keys-to-dissoc
+  #{:keechma/apps
+    :keechma/controllers
+    :keechma.subscriptions/batcher
+    :keechma/is-transacting
+    :keechma.app/should-run?
+    :keechma.app/deps
+    :keechma.app/variant})
+
 (defn dissoc-keechma-keys [app]
-  (reduce-kv
-   (fn [m k v]
-     (let [ns             (str (when (keyword? k) (namespace k)))
-           is-keechma-key (or (str/starts-with? ns "keechma.") (= "keechma" ns))]
-       (if is-keechma-key
-         m
-         (assoc m k v))))
-   {}
-   app))
+  (apply dissoc app keechma-keys-to-dissoc))
 
 (defn validate-controllers! [controllers ancestor-controllers visible-controllers]
   (let [errors
@@ -700,7 +701,7 @@
           dirty-meta  (:dirty-meta transaction)]
       (cond
         (seq dirty)
-        (let [controller-apps (set (map #(get-in app-state [:controller->app-index %]) dirty))
+        (let [controller-apps (->> dirty (map #(get-in app-state [:controller->app-index %])) set)
               lca-path        (get-lowest-common-ancestor-for-paths controller-apps)]
           (swap! app-state* assoc-empty-transaction)
           (binding [*transaction-depth* (inc *transaction-depth*)]
