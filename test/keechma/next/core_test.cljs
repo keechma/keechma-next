@@ -1514,3 +1514,19 @@
                            [:stop {::start-stop-counter nil}]
                            [:start {::start-stop-counter 1}]]}
            (get-derived-state app-instance)))))
+
+(deftest multiple-apps-with-same-child-controllers-should-throw
+  (let [app {:keechma/controllers {::counter-1 {:keechma.controller/params true}}
+             :keechma/apps {:app-1 {:keechma.app/should-run? (constantly true)
+                                    :keechma.app/deps [::counter-1]
+                                    :keechma/controllers {::counter-2 {:keechma.controller/params true}}}
+                            :app-2 {:keechma.app/should-run? (constantly true)
+                                    :keechma.app/deps [:counter-1]
+                                    :keechma/controllers {::counter-2 {:keechma.controller/params true}}}}}]
+    (is (thrown? js/Error (start! app)))))
+
+(deftest subscribing-to-non-existing-controller-throws
+  (let [app {:keechma/controllers {::counter-1 {:keechma.controller/params true}}}
+        app-instance (start! app)]
+    (is (thrown? js/Error (subscribe app-instance :non-existing-controller (constantly nil))))
+    (is (thrown? js/Error (subscribe-meta app-instance :non-existing-controller (constantly nil))))))

@@ -7,8 +7,7 @@
    [keechma.next.conformer :refer [conform conform-factory-produced]]
    [medley.core :refer [dissoc-in]]
    [com.stuartsierra.dependency :as dep]
-   [clojure.set :as set]
-   [clojure.string :as str]))
+   [clojure.set :as set]))
 
 (declare -dispatch)
 (declare reconcile-after-transaction!)
@@ -162,12 +161,17 @@
     (produce (get-controller-derived-deps-state app-state controller-name))))
 
 (defn get-app-store-path [app-path]
-  (vec (interpose :apps (concat [:apps] app-path))))
+  (->> app-path
+       (concat [:apps])
+       (interpose :apps)
+       vec))
 
 (defn get-sorted-controllers-for-app [app-state path]
   (let [{:keys [controllers controllers-graph]} (get-in app-state (get-app-store-path path))
         nodeset              (dep/nodes controllers-graph)
-        sorted-controllers   (filterv #(contains? controllers %) (dep/topo-sort controllers-graph))
+        sorted-controllers   (->> controllers-graph
+                                  dep/topo-sort
+                                  (filterv #(contains? controllers %)))
         isolated-controllers (->> (keys controllers)
                                   (filter #(not (contains? nodeset %))))]
     (concat isolated-controllers sorted-controllers)))
@@ -203,6 +207,33 @@
       (dissoc-in [:app->controllers-index path])
       (update :controller->app-index #(apply dissoc % controller-names))))
 
+(defn controller-exists? [{:keys [controllers]} controller-name]
+  ;; If we have a controller with composite key (e.g. `[:controller-name 1]`) we need to
+  ;; check if the factory controller with the name `[:controller-name]` exists.
+  (if (vector? controller-name)
+    (or (contains? controllers controller-name)
+        (contains? controllers (subvec controller-name 0 1)))
+    (contains? controllers controller-name)))
+
+(defn validate-controllers-deps! [app-controllers visible-controllers]
+  (let [errors
+        (reduce-kv
+         (fn [acc k v]
+           (let [deps (:keechma.controller/deps v)
+                 visible-controllers' (disj visible-controllers k)
+                 missing-deps (set/difference (set deps) visible-controllers')]
+             (if (seq missing-deps)
+               (update acc k conj {:keechma.anomalies/category :keechma.controller.errors/missing-deps
+                                   :keechma.controller/missing-deps missing-deps})
+               acc)))
+         {}
+         app-controllers)]
+    (when-not (empty? errors)
+      (throw (keechma-ex-info
+              "Invalid controllers"
+              :keechma.controllers.errors/invalid
+              {:keeechma.controllers/invalid errors})))))
+
 (defn validate-controllers-on-app-register! [controllers existing-controllers path]
   (let [errors
         (reduce-kv
@@ -230,7 +261,7 @@
 (defn deregister-app [app-state path]
   (let [app-store-path     (get-app-store-path path)
         app-ctx            (get-in app-state app-store-path)
-        controller-names   (set (keys (:controllers app-ctx)))
+        controller-names   (-> app-ctx :controllers keys set)
         remove-controllers #(apply dissoc % controller-names)]
     (-> app-state
         (dissoc-in app-store-path)
@@ -251,30 +282,6 @@
 (defn dissoc-keechma-keys [app]
   (apply dissoc app keechma-keys-to-dissoc))
 
-(defn validate-controllers! [controllers ancestor-controllers visible-controllers]
-  (let [errors
-        (reduce-kv
-         (fn [acc k v]
-           (let [deps (:keechma.controller/deps v)
-                 visible-controllers' (disj visible-controllers k)
-                 missing-deps (set/difference (set deps) visible-controllers')]
-             (cond
-               (contains? ancestor-controllers k)
-               (update acc k conj {:keechma.anomalies/category :keechma.controller.errors/duplicate-name})
-
-               (seq missing-deps)
-               (update acc k conj {:keechma.anomalies/category :keechma.controller.errors/missing-deps
-                                   :keechma.controller/missing-deps missing-deps})
-
-               :else acc)))
-         {}
-         controllers)]
-    (when-not (empty? errors)
-      (throw (keechma-ex-info
-              "Invalid controllers"
-              :keechma.controllers.errors/invalid
-              {:keeechma.controllers/invalid errors})))))
-
 (defn make-ctx
   [app {:keys [context] :as initial-ctx}]
   (let [context'             (merge context (dissoc-keechma-keys app))
@@ -284,7 +291,7 @@
         visible-controllers  (set/union ancestor-controllers (set (keys controllers)))
         controllers-graph    (build-controllers-graph controllers)]
 
-    (validate-controllers! controllers ancestor-controllers visible-controllers)
+    (validate-controllers-deps! controllers visible-controllers)
 
     (merge
      initial-ctx
@@ -531,9 +538,9 @@
     (remove-watch (:meta-state* instance) :keechma/app)
     (-dispatch app-state* controller-name :keechma.on/stop nil)
     (let [deps-state (get-controller-derived-deps-state @app-state* controller-name)
-          state      (ctrl/stop instance params @state* deps-state)] +
-         (reset! state* state)
-         (swap! app-state* assoc-in [:app-db controller-name] {:state state}))
+          state      (ctrl/stop instance params @state* deps-state)]
+      (reset! state* state)
+      (swap! app-state* assoc-in [:app-db controller-name] {:state state}))
     (ctrl/terminate instance)))
 
 (defn controller-on-deps-change! [app-state* controller-name]
@@ -694,7 +701,7 @@
               (reconcile-initial! app-state* path))))))))
 
 (defn reconcile-after-transaction! [app-state*]
-  (when (not (transacting?))
+  (when-not (transacting?)
     (let [app-state   @app-state*
           transaction (:transaction app-state)
           dirty       (:dirty transaction)
@@ -776,13 +783,23 @@
       (-get-batcher [_]
         batcher)
       (-subscribe [_ controller-name sub-fn]
-        (let [sub-id (keyword (gensym 'sub-id-))]
-          (swap! app-state* assoc-in [:subscriptions controller-name sub-id] sub-fn)
-          (partial unsubscribe! app-state* controller-name sub-id)))
+        (if-not (controller-exists? @app-state* controller-name)
+          (throw (keechma-ex-info
+                  "Attempted to subscribe to a non existing controller"
+                  :keechma.controller.errors/missing
+                  {:keechma/controller controller-name}))
+          (let [sub-id (keyword (gensym 'sub-id-))]
+            (swap! app-state* assoc-in [:subscriptions controller-name sub-id] sub-fn)
+            (partial unsubscribe! app-state* controller-name sub-id))))
       (-subscribe-meta [_ controller-name sub-fn]
-        (let [sub-id (keyword (gensym 'sub-meta-id-))]
-          (swap! app-state* assoc-in [:subscriptions-meta controller-name sub-id] sub-fn)
-          (partial unsubscribe-meta! app-state* controller-name sub-id)))
+        (if-not (controller-exists? @app-state* controller-name)
+          (throw (keechma-ex-info
+                  "Attempted to subscribe meta to a non existing controller"
+                  :keechma.controller.errors/missing
+                  {:keechma/controller controller-name}))
+          (let [sub-id (keyword (gensym 'sub-meta-id-))]
+            (swap! app-state* assoc-in [:subscriptions-meta controller-name sub-id] sub-fn)
+            (partial unsubscribe-meta! app-state* controller-name sub-id))))
       (-get-derived-state [_]
         (->> @app-state*
              :app-db
