@@ -340,6 +340,28 @@
            (when controller-instance
              (-transact app-state* transaction))))))))
 
+(defn get-derived-app-state [app-state]
+  (->> app-state
+       :app-db
+       (map (fn [[k v]]
+              (when
+               (and (not (and (vector? k) (= 1 (count k))))
+                    (:instance v))
+                [k (:derived-state v)])))
+       (filter identity)
+       (into {})))
+
+(defn get-app-meta-state [app-state]
+  (->> app-state
+       :app-db
+       (map (fn [[k v]]
+              (when
+               (and (not (and (vector? k) (= 1 (count k))))
+                    (:instance v))
+                [k (:meta-state v)])))
+       (filter identity)
+       (into {})))
+
 (defn app-broadcast [app-state* path event payload]
   (let [app-state                @app-state*
         ordered-controller-names (get-sorted-controllers-for-app app-state path)
@@ -442,6 +464,14 @@
           (sub derived-state))))
     (notify-subscriptions-meta app-state)))
 
+(defn notify-boundaries [app-state]
+  (let [boundaries-sub-fns (-> app-state :boundaries vals)]
+    (when (seq boundaries-sub-fns)
+      (let [derived-app-state (get-derived-app-state app-state)
+            app-meta-state (get-app-meta-state app-state)]
+        (doseq [boundary-sub-fn boundaries-sub-fns]
+          (boundary-sub-fn derived-app-state app-meta-state))))))
+
 (defn batched-notify-subscriptions-meta
   ([{:keys [batcher] :as app-state}]
    (batcher #(notify-subscriptions-meta app-state)))
@@ -496,7 +526,9 @@
     (sync-controller-meta->app-db! app-state* controller-name)
     (if (transacting?)
       (transaction-mark-dirty-meta! app-state* controller-name)
-      (batched-notify-subscriptions-meta @app-state* #{controller-name}))))
+      (do
+        (notify-boundaries @app-state*)
+        (batched-notify-subscriptions-meta @app-state* #{controller-name})))))
 
 (defn controller-start! [app-state* controller-name controller-type params]
   ;; Based on params so far, we're going to try to start the controller. There is one last chance to prevent it
@@ -717,11 +749,14 @@
                 dirty     (get-in app-state [:transaction :dirty])]
             (if (seq dirty)
               (recur app-state*)
-              (batched-notify-subscriptions @app-state*))))
+              (do
+                (notify-boundaries @app-state*)
+                (batched-notify-subscriptions @app-state*)))))
 
         (seq dirty-meta)
         (do
           (swap! app-state* assoc-empty-transaction)
+          (notify-boundaries @app-state*)
           (batched-notify-subscriptions-meta @app-state* dirty-meta))))))
 
 (defn reconcile-initial!
@@ -752,7 +787,8 @@
         ctx        (make-ctx app' {:path [] :is-running true})
         app-state* (atom (-> {:batcher           batcher
                               :keechma.app/state ::running
-                              :keechma.app/id    app-id}
+                              :keechma.app/id    app-id
+                              :keechma.app.reconciliation/generation 0}
                              (assoc-empty-transaction)
                              (register-app ctx)))]
 
@@ -800,18 +836,16 @@
           (let [sub-id (keyword (gensym 'sub-meta-id-))]
             (swap! app-state* assoc-in [:subscriptions-meta controller-name sub-id] sub-fn)
             (partial unsubscribe-meta! app-state* controller-name sub-id))))
+      (-subscribe-boundary [_ sub-fn]
+        (let [boundary-sub-id (-> (gensym 'boundary-sub-id) keyword)]
+          (swap! app-state* assoc-in [:boundaries boundary-sub-id] sub-fn)
+          #(swap! app-state* dissoc-in [:boundaries boundary-sub-id])))
       (-get-derived-state [_]
-        (->> @app-state*
-             :app-db
-             (map (fn [[k v]]
-                    (when
-                     (and (not (and (vector? k) (= 1 (count k))))
-                          (:instance v))
-                      [k (:derived-state v)])))
-             (filter identity)
-             (into {})))
+        (get-derived-app-state @app-state*))
       (-get-derived-state [_ controller-name]
         (get-in @app-state* [:app-db controller-name :derived-state]))
+      (-get-meta-state [_]
+        (get-app-meta-state @app-state*))
       (-get-meta-state [_ controller-name]
         (get-in @app-state* [:app-db controller-name :meta-state]))
       (-get-app-state* [_]

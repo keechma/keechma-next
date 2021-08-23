@@ -12,8 +12,9 @@
   (-stop! [this])
   (-subscribe [this controller-name sub-fn])
   (-subscribe-meta [this controller-name sub-fn])
+  (-subscribe-boundary [this sub-fn])
   (-get-derived-state [this] [this controller-name])
-  (-get-meta-state [this controller-name])
+  (-get-meta-state [this] [this controller-name])
   (-get-batcher [this])
   (-get-app-state* [this]))
 

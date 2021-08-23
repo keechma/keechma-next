@@ -2,7 +2,8 @@
   (:require
    [cljs.test :refer-macros [deftest is testing use-fixtures async]]
    [keechma.next.controller :as ctrl]
-   [keechma.next.core :refer [start! stop! subscribe subscribe-meta dispatch get-derived-state transact]]
+   [keechma.next.core :refer [start! stop! subscribe subscribe-meta dispatch get-derived-state get-meta-state transact]]
+   [keechma.next.boundary :refer [make-boundary]]
    [keechma.next.conformer :refer [conform]]
    [cljs.spec.alpha :as s]))
 
@@ -1530,3 +1531,52 @@
         app-instance (start! app)]
     (is (thrown? js/Error (subscribe app-instance :non-existing-controller (constantly nil))))
     (is (thrown? js/Error (subscribe-meta app-instance :non-existing-controller (constantly nil))))))
+
+(derive ::meta-controller :keechma/controller)
+
+(defmethod ctrl/handle ::meta-controller [{:keys [meta-state*]} ev payload]
+  (when (= :ping ev)
+    (reset! meta-state* payload)))
+
+(deftest meta-state
+  (let [meta-state* (atom nil)
+        app {:keechma/controllers {::meta-controller {:keechma.controller/params true}}}
+        app-instance (start! app)]
+    (subscribe-meta app-instance ::meta-controller #(reset! meta-state* %))
+    (is (= {::meta-controller nil} (get-meta-state app-instance)))
+    (is (nil? (get-meta-state app-instance ::meta-controller)))
+    (dispatch app-instance ::meta-controller :ping :foo)
+    (is (= {::meta-controller :foo} (get-meta-state app-instance)))
+    (is (= :foo (get-meta-state app-instance ::meta-controller)))
+    (is (= :foo @meta-state*))))
+
+(deftest boundary
+  (let [app {:keechma/controllers {::causal-a {:keechma.controller/params true}
+                                   ::causal-b {:keechma.controller/params true
+                                               :keechma.controller/deps [::causal-a]}}}
+        causal-b* (atom nil)
+        app-instance (start! app)
+        app-boundary (make-boundary app-instance (fn [app-state _]
+                                                   (-> app-state ::causal-a odd?)))]
+    (subscribe app-boundary ::causal-b #(reset! causal-b* %))
+    (is (= {::causal-a 1 ::causal-b 2}
+           (get-derived-state app-instance)
+           (get-derived-state app-boundary)))
+    (is (= 1
+           (get-derived-state app-instance ::causal-a)
+           (get-derived-state app-boundary ::causal-a)))
+    (is (nil? @causal-b*))
+    (dispatch app-instance ::causal-a :inc)
+    (is (= {::causal-a 2 ::causal-b 3}
+           (get-derived-state app-instance)))
+    (is (= {::causal-a 1 ::causal-b 2}
+           (get-derived-state app-boundary)))
+    (is (nil? @causal-b*))
+    (dispatch app-instance ::causal-a :inc)
+    (is (= {::causal-a 3 ::causal-b 4}
+           (get-derived-state app-instance)
+           (get-derived-state app-boundary)))
+    (is (= 3
+           (get-derived-state app-instance ::causal-a)
+           (get-derived-state app-boundary ::causal-a)))
+    (is (= 4 @causal-b*))))
