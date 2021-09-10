@@ -402,6 +402,10 @@ Keechma/next is inspired by many libraries in Clojure ecosystem (and beyond). He
 - [adapton](https://github.com/roman01la/adapton)
 - [lentes](https://github.com/funcool/lentes)
 
+## Companies / projects using Keechma-next in production
+
+- [Psithur - Symplast](https://psithur.com/features)
+
 ## Contributing
 
 1. Fork this repo
