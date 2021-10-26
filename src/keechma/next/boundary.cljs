@@ -42,6 +42,12 @@
                                (when (predicate-fn derived-app-state app-meta-state)
                                  (sub-fn derived-app-state app-meta-state)))]
           (pt/-subscribe-boundary app-instance wrapped-sub-fn)))
+      (-subscribe-on-controller-dispatch [this app-id controller-name subscribing-controller-name sub-fn]
+        (let [wrapped-sub-fn (wrap-sub-fn sub-fn is-running*)]
+          (pt/-subscribe-on-controller-dispatch app-instance app-id controller-name subscribing-controller-name wrapped-sub-fn)))
+      (-subscribe-on-controller-broadcast [this app-id controller-name subscribing-controller-name sub-fn]
+        (let [wrapped-sub-fn (wrap-sub-fn sub-fn is-running*)]
+          (pt/-subscribe-on-controller-broadcast app-instance app-id controller-name subscribing-controller-name wrapped-sub-fn)))
       (-get-derived-state [_]
         @derived-app-state*)
       (-get-derived-state [_ controller-name]
