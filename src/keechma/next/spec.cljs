@@ -1,5 +1,6 @@
 (ns keechma.next.spec
   (:require
+   [keechma.next.protocols :as pt]
    [cljs.spec.alpha :as s]
    [com.fulcrologic.guardrails.core :refer [>def]]))
 
@@ -14,8 +15,14 @@
       (and (vector? val) (= 1 (count val)))
       (and (vector? val) (= 2 (count val)))))
 
+(defn no-root-parent? [subapp]
+  (not (contains? subapp :keechma.root/parent)))
+
 (defn inline-app-variant [[variant app]]
   (assoc app :keechma.app/variant variant))
+
+(>def :keechma.root/parent
+      #(satisfies? pt/IRootAppInstance %))
 
 (>def :keechma.controller.factory/produce
       fn?)
@@ -41,6 +48,11 @@
 
 (>def :keechma.controller.name/singleton
       keyword?)
+
+(>def :keechma.controller/proxy
+      (s/or
+       :keyword keyword?
+       :identity :keechma.controller.name/identity))
 
 (>def :keechma.controller.name/identity
       (s/tuple keyword? (complement nil?)))
@@ -79,6 +91,10 @@
                      :opt [:keechma.controller/is-global])
              static-config?))
 
+(>def :keechma.controller.config/proxy
+      (s/keys
+       :req [:keechma.controller/proxy]))
+
 (>def :keechma.controller.config/factory
       (s/keys
        :req [:keechma.controller/deps
@@ -87,7 +103,8 @@
        :opt [:keechma.controller/is-global]))
 
 (>def :keechma.controller/config
-      (s/or :static :keechma.controller.config/static
+      (s/or :proxy :keechma.controller.config/proxy
+            :static :keechma.controller.config/static
             :dynamic :keechma.controller.config/dynamic))
 
 (>def :keechma.controller.variant/singleton
@@ -118,12 +135,14 @@
 (>def :keechma/app
       (s/keys
        :req [:keechma/controllers]
-       :opt [:keechma/apps]))
+       :opt [:keechma/apps :keechma.root/parent]))
 
 (>def :keechma/nested-app
-      (s/or
-       :dynamic (s/keys :req [:keechma.app/load :keechma.app/should-run? :keechma.app/deps])
-       :static (s/merge :keechma/app (s/keys :req [:keechma.app/should-run? :keechma.app/deps]))))
+      (s/and
+       no-root-parent?
+       (s/or
+        :dynamic (s/keys :req [:keechma.app/load :keechma.app/should-run? :keechma.app/deps])
+        :static (s/merge :keechma/app (s/keys :req [:keechma.app/should-run? :keechma.app/deps])))))
 
 (>def :keechma.app/should-run? fn?)
 (>def :keechma.app/load fn?)
