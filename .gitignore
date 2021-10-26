@@ -16,3 +16,4 @@
 pom.xml
 pom.xml.asc
 .lsp
+/.clj-kondo/.cache
