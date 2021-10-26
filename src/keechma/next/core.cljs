@@ -215,6 +215,13 @@
         (contains? controllers (subvec controller-name 0 1)))
     (contains? controllers controller-name)))
 
+(defn validate-controller-exists! [app-state controller-name]
+  (when-not (controller-exists? app-state controller-name)
+    (throw (keechma-ex-info
+            "Attempted to subscribe to a non existing controller"
+            :keechma.controller.errors/missing
+            {:keechma/controller controller-name}))))
+
 (defn validate-controllers-deps! [app-controllers visible-controllers]
   (let [errors
         (reduce-kv
@@ -319,9 +326,13 @@
 
 (defn -call [app-state* controller-name api-fn & args]
   (when-not (stopped? @app-state*)
-    (let [app-state @app-state*
-          api       (get-in app-state [:app-db controller-name :instance :keechma.controller/api])]
-      (apply api-fn api args))))
+    (let [controller-instance (get-in @app-state* [:app-db controller-name :instance])]
+      (if (:keechma.controller/proxy controller-instance)
+        (let [app (:keechma.root/parent controller-instance)
+              controller-name (:keechma.controller/proxy controller-instance)]
+          (protocols/-call app controller-name api-fn args))
+        (let [api (:keechma.controller/api controller-instance)]
+          (apply api-fn api args))))))
 
 (defn -get-api* [app-state* controller-name]
   (reify
@@ -332,9 +343,20 @@
   ([app-state* controller-name event] (-dispatch app-state* controller-name event))
   ([app-state* controller-name event payload]
    (when-not (stopped? @app-state*)
-     (let [controller-phase (get-in @app-state* [:app-db controller-name :phase])]
-       (if (= :initializing controller-phase)
+     (let [controller (get-in @app-state* [:app-db controller-name])
+           controller-instance (:instance controller)
+           controller-phase (:phase controller)]
+
+       (cond
+         (:keechma.controller/proxy controller-instance)
+         (let [app (:keechma.root/parent controller-instance)
+               controller-name (:keechma.controller/proxy controller-instance)]
+           (protocols/-dispatch app controller-name event payload))
+
+         (= :initializing controller-phase)
          (swap! app-state* update-in [:app-db controller-name :events-buffer] conj [event payload])
+
+         :else
          (let [controller-instance (get-controller-instance @app-state* controller-name)
                transaction         #(ctrl/handle (assoc controller-instance :keechma/is-transacting true) event payload)]
            (when controller-instance
@@ -530,6 +552,24 @@
         (notify-boundaries @app-state*)
         (batched-notify-subscriptions-meta @app-state* #{controller-name})))))
 
+(defn on-proxied-controller-state-change [app-state* controller-name value]
+  (when-not *stopping*
+    (swap! app-state* assoc-in [:app-db controller-name :derived-state] value)
+    (if (transacting?)
+      (transaction-mark-dirty! app-state* controller-name)
+      (do
+        (transaction-mark-dirty! app-state* controller-name)
+        (reconcile-after-transaction! app-state*)))))
+
+(defn on-proxied-controller-meta-state-change [app-state* controller-name value]
+  (when-not *stopping*
+    (swap! app-state* assoc-in [:app-db controller-name :meta-state] value)
+    (if (transacting?)
+      (transaction-mark-dirty-meta! app-state* controller-name)
+      (do
+        (notify-boundaries @app-state*)
+        (batched-notify-subscriptions-meta @app-state* #{controller-name})))))
+
 (defn controller-start! [app-state* controller-name controller-type params]
   ;; Based on params so far, we're going to try to start the controller. There is one last chance to prevent it
   ;; and it will happen in the `make-controller-instance`. In that function, we'll assoc the real :keechma.controller/type for
@@ -562,18 +602,22 @@
             (add-watch state* :keechma/app #(on-controller-state-change app-state* controller-name))))))))
 
 (defn controller-stop! [app-state* controller-name]
-  (let [instance (get-in @app-state* [:app-db controller-name :instance])
-        params   (:keechma.controller/params instance)
-        state*   (:state* instance)]
-    (swap! app-state* assoc-in [:app-db controller-name :phase] :stopping)
-    (remove-watch state* :keechma/app)
-    (remove-watch (:meta-state* instance) :keechma/app)
-    (-dispatch app-state* controller-name :keechma.on/stop nil)
-    (let [deps-state (get-controller-derived-deps-state @app-state* controller-name)
-          state      (ctrl/stop instance params @state* deps-state)]
-      (reset! state* state)
-      (swap! app-state* assoc-in [:app-db controller-name] {:state state}))
-    (ctrl/terminate instance)))
+  (let [instance (get-in @app-state* [:app-db controller-name :instance])]
+    (if (:keechma.controller/proxy instance)
+      (let [{:keys [unsubscribe unsubscribe-meta]} instance]
+        (unsubscribe)
+        (unsubscribe-meta))
+      (let [params   (:keechma.controller/params instance)
+            state*   (:state* instance)]
+        (swap! app-state* assoc-in [:app-db controller-name :phase] :stopping)
+        (remove-watch state* :keechma/app)
+        (remove-watch (:meta-state* instance) :keechma/app)
+        (-dispatch app-state* controller-name :keechma.on/stop nil)
+        (let [deps-state (get-controller-derived-deps-state @app-state* controller-name)
+              state      (ctrl/stop instance params @state* deps-state)]
+          (reset! state* state)
+          (swap! app-state* assoc-in [:app-db controller-name] {:state state}))
+        (ctrl/terminate instance)))))
 
 (defn controller-on-deps-change! [app-state* controller-name]
   (let [app-state       @app-state*
@@ -588,7 +632,47 @@
             derived-state (ctrl/derive-state instance state deps-state)]
         (swap! app-state* assoc-in [:app-db controller-name :derived-state] derived-state)))))
 
+(defn get-proxied-controller-app-and-controller-name [parent-app proxied-controller-name]
+  (loop [owner-app parent-app
+         controller-name proxied-controller-name]
+    (let [parent-app-state (-> owner-app protocols/-get-app-state* deref)
+          proxied-controller (get-in parent-app-state [:controllers controller-name])]
+      (if (:keechma.controller/proxy proxied-controller)
+        (recur (:keechma.root/parent proxied-controller) (:keechma.controller/proxy proxied-controller))
+        {:app owner-app :controller-name controller-name}))))
+
+(defn idempotently-proxy-controller-start! [app-state* controller-name]
+  (let [app-state @app-state*]
+    (when-not (get-in app-state [:app-db controller-name :instance])
+      (let [controller (get-in app-state [:controllers controller-name])
+            proxied-controller (:keechma.controller/proxy controller)
+            parent-app (:keechma.root/parent controller)]
+        (when-not parent-app
+          (throw (keechma-ex-info
+                  "Attempted to proxy controller from a non-existing parent app"
+                  :keechma.root.parent/missing
+                  {:keechma/controller controller-name
+                   :keechma.controller/proxy proxied-controller})))
+        (let [{owner-app :app
+               proxied-controller-name :controller-name} (get-proxied-controller-app-and-controller-name parent-app proxied-controller)
+              derived-state (protocols/-get-derived-state owner-app proxied-controller-name)
+              meta-state (protocols/-get-meta-state owner-app proxied-controller-name)
+              unsubscribe (protocols/-subscribe owner-app proxied-controller-name #(on-proxied-controller-state-change app-state* controller-name %))
+              unsubscribe-meta (protocols/-subscribe-meta owner-app proxied-controller-name #(on-proxied-controller-meta-state-change app-state* controller-name %))
+              controller' (assoc controller
+                                 :keechma.root/parent owner-app
+                                 :keechma.controller/proxy proxied-controller-name
+                                 :unsubscribe unsubscribe
+                                 :unsubscribe-meta unsubscribe-meta)]
+          (swap! app-state* #(-> %
+                                 (assoc-in [:app-db controller-name :derived-state] derived-state)
+                                 (assoc-in [:app-db controller-name :meta-state] meta-state)
+                                 (assoc-in [:app-db controller-name :instance] controller'))))))))
+
 (defn reconcile-controller-lifecycle-state! [app-state* controller-name]
+
+  (if (get-in @app-state* [:controllers controller-name :keechma.controller/proxy])
+    (idempotently-proxy-controller-start! app-state* controller-name)
   ;; For each controller in the to-reconcile vector do what is needed based on the return value of
   ;; the params and the type function
   ;;
@@ -607,22 +691,22 @@
   ;; | true                      | truthy      | truthy         | true                          | Dispatch :keechma.on/deps-change event to the running controller instance |
   ;; +---------------------------+-------------+----------------+-------------------------------+---------------------------------------------------------------------------+
 
-  (let [app-state @app-state*
-        {params :params controller-type :type} (get-params-and-type app-state controller-name)]
+    (let [app-state @app-state*
+          {params :params controller-type :type} (get-params-and-type app-state controller-name)]
 
-    (assert (isa? controller-type :keechma/controller)
-            (str "Controller " controller-name " has type " controller-type " which is not derived from :keechma/controller"))
+      (assert (isa? controller-type :keechma/controller)
+              (str "Controller " controller-name " has type " controller-type " which is not derived from :keechma/controller"))
 
-    (let [current-params          (get-in app-state [:app-db controller-name :params])
-          current-controller-type (get-in app-state [:app-db controller-name :type])
-          actions                 (determine-actions current-params params current-controller-type controller-type)]
+      (let [current-params          (get-in app-state [:app-db controller-name :params])
+            current-controller-type (get-in app-state [:app-db controller-name :type])
+            actions                 (determine-actions current-params params current-controller-type controller-type)]
 
-      (when (contains? actions :stop)
-        (controller-stop! app-state* controller-name))
-      (when (contains? actions :start)
-        (controller-start! app-state* controller-name controller-type params))
-      (when (contains? actions :deps-change)
-        (controller-on-deps-change! app-state* controller-name)))))
+        (when (contains? actions :stop)
+          (controller-stop! app-state* controller-name))
+        (when (contains? actions :start)
+          (controller-start! app-state* controller-name controller-type params))
+        (when (contains? actions :deps-change)
+          (controller-on-deps-change! app-state* controller-name))))))
 
 (defn reconcile-controller-factory! [app-state* controller-name]
   (let [app-state          @app-state*
@@ -780,76 +864,76 @@
      (when (zero? depth)
        (reconcile-after-transaction! app-state*)))))
 
-(defn start! [app]
-  (let [app'       (conform app)
-        app-id     (str (gensym 'app-id))
-        batcher    (or (:keechma.subscriptions/batcher app') default-batcher)
-        ctx        (make-ctx app' {:path [] :is-running true})
-        app-state* (atom (-> {:batcher           batcher
-                              :keechma.app/state ::running
-                              :keechma.app/id    app-id
-                              :keechma.app.reconciliation/generation 0}
-                             (assoc-empty-transaction)
-                             (register-app ctx)))]
+(defn start!
+  ([app] (start! app nil))
+  ([app parent-app]
+   (let [app'       (cond-> app
+                      parent-app (assoc :keechma.root/parent parent-app)
+                      true conform)
+         app-id     (str (gensym 'app-id))
+         batcher    (or (:keechma.subscriptions/batcher app') default-batcher)
+         ctx        (make-ctx app' {:path [] :is-running true})
+         app-state* (atom (-> {:batcher           batcher
+                               :keechma.app/state ::running
+                               :keechma.app/id    app-id
+                               :keechma.app.reconciliation/generation 0}
+                              (assoc-empty-transaction)
+                              (register-app ctx)))]
 
-    (reconcile-initial! app-state* [])
+     (reconcile-initial! app-state* [])
 
-    (reify
-      IAppInstance
-      (-dispatch [_ controller-name event]
-        (-dispatch app-state* controller-name event nil))
-      (-dispatch [_ controller-name event payload]
-        (-dispatch app-state* controller-name event payload))
-      (-broadcast [_ event]
-        (-broadcast app-state* event nil))
-      (-broadcast [app-state* event payload]
-        (-broadcast app-state* event payload))
-      (-call [_ controller-name api-fn args]
-        (apply -call app-state* controller-name api-fn args))
-      (-get-api* [_ controller-name]
-        (-get-api* app-state* controller-name))
-      (-transact [_ transaction]
-        (-transact app-state* transaction))
-      (-get-id [_] app-id)
-      IRootAppInstance
-      (-stop! [_]
-        (binding [*stopping* true]
-          (stop-app! app-state* []))
-        (swap! app-state* assoc :keechma.app/state ::stopped))
-      (-get-batcher [_]
-        batcher)
-      (-subscribe [_ controller-name sub-fn]
-        (if-not (controller-exists? @app-state* controller-name)
-          (throw (keechma-ex-info
-                  "Attempted to subscribe to a non existing controller"
-                  :keechma.controller.errors/missing
-                  {:keechma/controller controller-name}))
-          (let [sub-id (keyword (gensym 'sub-id-))]
-            (swap! app-state* assoc-in [:subscriptions controller-name sub-id] sub-fn)
-            (partial unsubscribe! app-state* controller-name sub-id))))
-      (-subscribe-meta [_ controller-name sub-fn]
-        (if-not (controller-exists? @app-state* controller-name)
-          (throw (keechma-ex-info
-                  "Attempted to subscribe meta to a non existing controller"
-                  :keechma.controller.errors/missing
-                  {:keechma/controller controller-name}))
-          (let [sub-id (keyword (gensym 'sub-meta-id-))]
-            (swap! app-state* assoc-in [:subscriptions-meta controller-name sub-id] sub-fn)
-            (partial unsubscribe-meta! app-state* controller-name sub-id))))
-      (-subscribe-boundary [_ sub-fn]
-        (let [boundary-sub-id (-> (gensym 'boundary-sub-id) keyword)]
-          (swap! app-state* assoc-in [:boundaries boundary-sub-id] sub-fn)
-          #(swap! app-state* dissoc-in [:boundaries boundary-sub-id])))
-      (-get-derived-state [_]
-        (get-derived-app-state @app-state*))
-      (-get-derived-state [_ controller-name]
-        (get-in @app-state* [:app-db controller-name :derived-state]))
-      (-get-meta-state [_]
-        (get-app-meta-state @app-state*))
-      (-get-meta-state [_ controller-name]
-        (get-in @app-state* [:app-db controller-name :meta-state]))
-      (-get-app-state* [_]
-        app-state*))))
+     (reify
+       IAppInstance
+       (-dispatch [_ controller-name event]
+         (-dispatch app-state* controller-name event nil))
+       (-dispatch [_ controller-name event payload]
+         (-dispatch app-state* controller-name event payload))
+       (-broadcast [_ event]
+         (-broadcast app-state* event nil))
+       (-broadcast [app-state* event payload]
+         (-broadcast app-state* event payload))
+       (-call [_ controller-name api-fn args]
+         (apply -call app-state* controller-name api-fn args))
+       (-get-api* [_ controller-name]
+         (-get-api* app-state* controller-name))
+       (-transact [_ transaction]
+         (-transact app-state* transaction))
+       (-get-id [_] app-id)
+       IRootAppInstance
+       (-stop! [_]
+         (binding [*stopping* true]
+           (stop-app! app-state* []))
+         (swap! app-state* assoc :keechma.app/state ::stopped))
+       (-get-batcher [_]
+         batcher)
+       (-subscribe [_ controller-name sub-fn]
+         (validate-controller-exists! @app-state* controller-name)
+         (let [sub-id (-> 'sub-id gensym keyword)]
+           (swap! app-state* assoc-in [:subscriptions controller-name sub-id] sub-fn)
+           (partial unsubscribe! app-state* controller-name sub-id)))
+       (-subscribe-meta [_ controller-name sub-fn]
+         (validate-controller-exists! @app-state* controller-name)
+         (let [sub-id (-> 'sub-meta-id gensym keyword)]
+           (swap! app-state* assoc-in [:subscriptions-meta controller-name sub-id] sub-fn)
+           (partial unsubscribe-meta! app-state* controller-name sub-id)))
+       (-subscribe-boundary [_ sub-fn]
+         (let [boundary-sub-id (-> 'boundary-sub-id gensym keyword)]
+           (swap! app-state* assoc-in [:boundaries boundary-sub-id] sub-fn)
+           #(swap! app-state* dissoc-in [:boundaries boundary-sub-id])))
+       (-make-proxy-controller [_ controller-name]
+         (validate-controller-exists! @app-state* controller-name)
+         (let [proxy-controller-id (-> 'proxy-id gensym keyword)]
+           (swap! app-state* assoc-in [:proxy-controllers controller-name proxy-controller-id] nil)))
+       (-get-derived-state [_]
+         (get-derived-app-state @app-state*))
+       (-get-derived-state [_ controller-name]
+         (get-in @app-state* [:app-db controller-name :derived-state]))
+       (-get-meta-state [_]
+         (get-app-meta-state @app-state*))
+       (-get-meta-state [_ controller-name]
+         (get-in @app-state* [:app-db controller-name :meta-state]))
+       (-get-app-state* [_]
+         app-state*)))))
 
 (defn make-app-proxy [proxied-fn]
   (fn [& args]

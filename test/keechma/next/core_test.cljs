@@ -9,6 +9,8 @@
 
 #_(use-fixtures :once {:before (fn [] (js/console.clear))})
 
+(def vec-conj (fnil conj []))
+
 (defn log-cmd!
   ([ctrl cmd] (log-cmd! ctrl cmd nil))
   ([{controller-name :keechma.controller/name :keys [cmd-log*]} cmd _]
@@ -1471,7 +1473,6 @@
 (derive ::start-stop :keechma/controller)
 (derive ::start-stop-counter :keechma/controller)
 
-(def vec-conj (fnil conj []))
 
 (defmethod ctrl/start ::start-stop [ctrl params deps-state prev-state]
   (vec-conj prev-state [:start deps-state]))
@@ -1580,3 +1581,106 @@
            (get-derived-state app-instance ::causal-a)
            (get-derived-state app-boundary ::causal-a)))
     (is (= 4 @causal-b*))))
+
+
+
+(derive ::proxy-counter :keechma/controller)
+
+(defmethod ctrl/start ::proxy-counter [_ _ _ _]
+  1)
+
+(defmethod ctrl/handle ::proxy-counter [{:keys [meta-state* state*]} ev _]
+  (swap! meta-state* update :log vec-conj ev)
+  (case ev
+    :inc (swap! state* inc)
+    :dec (swap! state* dec)
+    nil))
+
+(deftest proxy-controllers-conform
+  (let [app {:keechma/controllers {:proxy-counter {:keechma.controller/proxy ::proxy-counter}}}]
+    (is (= {:keechma/controllers {:proxy-counter {:keechma.controller/proxy :keechma.next.core-test/proxy-counter}}
+            :keechma/apps {}}
+           (conform app)))))
+
+(deftest proxy-controllers-1
+  (let [app-1 {:keechma/controllers {::proxy-counter
+                                     #:keechma.controller {:params true}}}
+        app-1-instance (start! app-1)
+        app-2 {:keechma/controllers {::proxy-counter {:keechma.controller/proxy ::proxy-counter}}}
+        app-2-instance (start! app-2 app-1-instance)
+        app-3 {:keechma/controllers {::proxy-counter {:keechma.controller/proxy ::proxy-counter}}}
+        app-3-instance (start! app-3 app-1-instance)
+        app-4 {:keechma/controllers {::proxy-counter {:keechma.controller/proxy ::proxy-counter}}}
+        app-4-instance (start! app-4 app-3-instance)
+        app-1-proxy* (atom nil)
+        app-2-proxy* (atom nil)
+        app-3-proxy* (atom nil)
+        app-4-proxy* (atom nil)]
+
+    (subscribe app-1-instance ::proxy-counter #(reset! app-1-proxy* %))
+    (subscribe app-2-instance ::proxy-counter #(reset! app-2-proxy* %))
+    (subscribe app-3-instance ::proxy-counter #(reset! app-3-proxy* %))
+    (subscribe app-4-instance ::proxy-counter #(reset! app-4-proxy* %))
+
+    (is (= {::proxy-counter 1}
+           (get-derived-state app-1-instance)
+           (get-derived-state app-2-instance)
+           (get-derived-state app-3-instance)
+           (get-derived-state app-4-instance)))
+    (is (= {::proxy-counter {:log [:keechma.on/start]}}
+           (get-meta-state app-1-instance)
+           (get-meta-state app-2-instance)
+           (get-meta-state app-3-instance)
+           (get-meta-state app-4-instance)))
+
+    (dispatch app-1-instance ::proxy-counter :inc)
+    (is (= {::proxy-counter 2}
+           (get-derived-state app-1-instance)
+           (get-derived-state app-2-instance)
+           (get-derived-state app-3-instance)
+           (get-derived-state app-4-instance)))
+    (is (= {::proxy-counter {:log [:keechma.on/start :inc]}}
+           (get-meta-state app-1-instance)
+           (get-meta-state app-2-instance)
+           (get-meta-state app-3-instance)
+           (get-meta-state app-4-instance)))
+    (is (= 2 @app-1-proxy* @app-2-proxy* @app-3-proxy* @app-4-proxy*))
+
+    (dispatch app-2-instance ::proxy-counter :dec)
+    (is (= {::proxy-counter 1}
+           (get-derived-state app-1-instance)
+           (get-derived-state app-2-instance)
+           (get-derived-state app-3-instance)
+           (get-derived-state app-4-instance)))
+    (is (= {::proxy-counter {:log [:keechma.on/start :inc :dec]}}
+           (get-meta-state app-1-instance)
+           (get-meta-state app-2-instance)
+           (get-meta-state app-3-instance)
+           (get-meta-state app-4-instance)))
+    (is (= 1 @app-1-proxy* @app-2-proxy* @app-3-proxy* @app-4-proxy*))
+
+    (dispatch app-3-instance ::proxy-counter :inc)
+    (is (= {::proxy-counter 2}
+           (get-derived-state app-1-instance)
+           (get-derived-state app-2-instance)
+           (get-derived-state app-3-instance)
+           (get-derived-state app-4-instance)))
+    (is (= {::proxy-counter {:log [:keechma.on/start :inc :dec :inc]}}
+           (get-meta-state app-1-instance)
+           (get-meta-state app-2-instance)
+           (get-meta-state app-3-instance)
+           (get-meta-state app-4-instance)))
+    (is (= 2 @app-1-proxy* @app-2-proxy* @app-3-proxy* @app-4-proxy*))
+
+    (dispatch app-4-instance ::proxy-counter :dec)
+    (is (= {::proxy-counter 1}
+           (get-derived-state app-1-instance)
+           (get-derived-state app-2-instance)
+           (get-derived-state app-3-instance)
+           (get-derived-state app-4-instance)))
+    (is (= {::proxy-counter {:log [:keechma.on/start :inc :dec :inc :dec]}}
+           (get-meta-state app-1-instance)
+           (get-meta-state app-2-instance)
+           (get-meta-state app-3-instance)
+           (get-meta-state app-4-instance)))
+    (is (= 1 @app-1-proxy* @app-2-proxy* @app-3-proxy* @app-4-proxy*))))

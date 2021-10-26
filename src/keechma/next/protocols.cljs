@@ -16,7 +16,8 @@
   (-get-derived-state [this] [this controller-name])
   (-get-meta-state [this] [this controller-name])
   (-get-batcher [this])
-  (-get-app-state* [this]))
+  (-get-app-state* [this])
+  (-make-proxy-controller [this controller-name]))
 
 (defn make-api-proxy [api-fn]
   (fn [{:keechma/keys [app]} controller-name & args]

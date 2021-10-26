@@ -1,5 +1,5 @@
 (ns keechma.next.conformer
-  (:require [com.fulcrologic.guardrails.core :refer [>defn | ? =>]]
+  (:require [com.fulcrologic.guardrails.core :refer [>defn =>]]
             [keechma.next.spec]))
 
 (declare conform-apps)
@@ -39,16 +39,18 @@
       (dissoc controller :keechma.controller/deps))))
 
 (defn conform-controller [[controller-name controller-def]]
-  (let [controller-variant (get-controller-variant controller-name)
-        params-variant (get-params-variant controller-def)
-        type-variant (get-type-variant controller-def)]
-    [controller-name
-     (cond-> controller-def
-       true (update :keechma.controller/type #(or % (if (vector? controller-name) (first controller-name) controller-name)))
-       true (assoc :keechma.controller/variant controller-variant)
-       true (assoc :keechma.controller.type/variant type-variant)
-       true conform-deps
-       (not= :factory controller-variant) (assoc :keechma.controller.params/variant params-variant))]))
+  (if (:keechma.controller/proxy controller-def)
+    [controller-name controller-def]
+    (let [controller-variant (get-controller-variant controller-name)
+          params-variant (get-params-variant controller-def)
+          type-variant (get-type-variant controller-def)]
+      [controller-name
+       (cond-> controller-def
+         true (update :keechma.controller/type #(or % (if (vector? controller-name) (first controller-name) controller-name)))
+         true (assoc :keechma.controller/variant controller-variant)
+         true (assoc :keechma.controller.type/variant type-variant)
+         true conform-deps
+         (not= :factory controller-variant) (assoc :keechma.controller.params/variant params-variant))])))
 
 (defn conform-controllers [controllers]
   (->> controllers
