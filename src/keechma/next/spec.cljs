@@ -91,8 +91,7 @@
 
 (>def :keechma.controller.config/proxy
       (s/keys
-       :req [:keechma.controller/proxy]
-       :opt [:keechma.controller/is-global]))
+       :req [:keechma.controller/proxy]))
 
 (>def :keechma.controller.config/factory
       (s/keys

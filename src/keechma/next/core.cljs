@@ -402,8 +402,7 @@
   ([app-state* event] (-broadcast app-state* event nil))
   ([app-state* event payload]
    (when-not (stopped? @app-state*)
-     (binding [*transaction-depth* (inc *transaction-depth*)]
-       (app-broadcast app-state* [] event payload))
+     (app-broadcast app-state* [] event payload)
      (reconcile-after-transaction! app-state*))))
 
 (defn prep [controller]
@@ -664,10 +663,10 @@
                                  :keechma.controller/proxy proxied-controller-name
                                  :unsubscribe unsubscribe
                                  :unsubscribe-meta unsubscribe-meta)]
-          (swap! app-state* #(-> %
-                                 (assoc-in [:app-db controller-name :derived-state] derived-state)
-                                 (assoc-in [:app-db controller-name :meta-state] meta-state)
-                                 (assoc-in [:app-db controller-name :instance] controller'))))))))
+          (swap! app-state* update-in [:app-db controller-name] merge {:derived-state derived-state
+                                                                       :meta-state meta-state
+                                                                       :instance controller'
+                                                                       :phase :running}))))))
 
 (defn reconcile-controller-lifecycle-state! [app-state* controller-name]
 
