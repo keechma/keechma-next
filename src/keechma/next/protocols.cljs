@@ -13,11 +13,12 @@
   (-subscribe [this controller-name sub-fn])
   (-subscribe-meta [this controller-name sub-fn])
   (-subscribe-boundary [this sub-fn])
+  (-subscribe-on-controller-dispatch [this app-id controller-name subscribing-controller-name sub-fn])
+  (-subscribe-on-controller-broadcast [this app-id controller-name subscribing-controller-name sub-fn])
   (-get-derived-state [this] [this controller-name])
   (-get-meta-state [this] [this controller-name])
   (-get-batcher [this])
-  (-get-app-state* [this])
-  (-make-proxy-controller [this controller-name]))
+  (-get-app-state* [this]))
 
 (defn make-api-proxy [api-fn]
   (fn [{:keechma/keys [app]} controller-name & args]
