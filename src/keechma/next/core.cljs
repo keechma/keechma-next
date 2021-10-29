@@ -14,6 +14,7 @@
 (declare reconcile-initial!)
 
 (def ^:dynamic *transaction-depth* 0)
+(def ^:dynamic *current-app-transaction-depth* {})
 (def ^:dynamic *stopping* false)
 
 (defn transacting? []
@@ -344,14 +345,18 @@
       res)))
 
 (defn -call [app-state* controller-name api-fn & args]
-  (when-not (stopped? @app-state*)
-    (let [controller-instance (get-controller-instance @app-state* controller-name)]
-      (if (:keechma.controller/proxy controller-instance)
-        (let [app (:keechma.root/parent controller-instance)
-              controller-name (:keechma.controller/proxy controller-instance)]
-          (protocols/-call app controller-name api-fn args))
-        (let [api (:keechma.controller/api controller-instance)]
-          (apply api-fn api args))))))
+  (let [app-state @app-state*]
+    (when-not (stopped? app-state)
+      (let [controller-instance (get-controller-instance app-state controller-name)]
+        (if (:keechma.controller/proxy controller-instance)
+          (let [app (:keechma.root/parent controller-instance)
+                controller-name (:keechma.controller/proxy controller-instance)
+                app-id (:keechma.app/id app-state)]
+            (binding [*current-app-transaction-depth* (assoc *current-app-transaction-depth* app-id *transaction-depth*)
+                      *transaction-depth* 0]
+              (protocols/-call app controller-name api-fn args)))
+          (let [api (:keechma.controller/api controller-instance)]
+            (apply api-fn api args)))))))
 
 (defn -get-api* [app-state* controller-name]
   (reify
@@ -361,23 +366,27 @@
 (defn -dispatch
   ([app-state* controller-name event] (-dispatch app-state* controller-name event))
   ([app-state* controller-name event payload]
-   (when-not (stopped? @app-state*)
-     (let [controller (get-in @app-state* [:app-db controller-name])
-           controller-instance (:instance controller)
-           controller-phase (:phase controller)]
+   (let [app-state @app-state*]
+     (when-not (stopped? app-state)
+       (let [controller (get-in app-state [:app-db controller-name])
+             controller-instance (:instance controller)
+             controller-phase (:phase controller)
+             app-id (:keechma.app/id app-state)]
 
-       (cond
-         (and (not= controller-phase :proxied-controller-stopped)
-              (:keechma.controller/proxy controller-instance))
-         (let [app (:keechma.root/parent controller-instance)
-               controller-name (:keechma.controller/proxy controller-instance)]
-           (protocols/-dispatch app controller-name event payload))
+         (cond
+           (and (not= controller-phase :proxied-controller-stopped)
+                (:keechma.controller/proxy controller-instance))
+           (let [app (:keechma.root/parent controller-instance)
+                 controller-name (:keechma.controller/proxy controller-instance)]
+             (binding [*current-app-transaction-depth* (assoc *current-app-transaction-depth* app-id *transaction-depth*)
+                       *transaction-depth* 0]
+               (protocols/-dispatch app controller-name event payload)))
 
-         (= :initializing controller-phase)
-         (swap! app-state* update-in [:app-db controller-name :events-buffer] conj [event payload])
+           (= :initializing controller-phase)
+           (swap! app-state* update-in [:app-db controller-name :events-buffer] conj [event payload])
 
-         controller-instance
-         (-transact app-state* #(ctrl/handle (assoc controller-instance :keechma/is-transacting true) event payload)))))))
+           controller-instance
+           (-transact app-state* #(ctrl/handle (assoc controller-instance :keechma/is-transacting true) event payload))))))))
 
 (defn get-derived-app-state [app-state]
   (->> app-state
@@ -619,6 +628,7 @@
 (defn on-proxied-controller-change! [app-state* controller-name]
   (when-not *stopping*
     (let [app-state @app-state*
+          app-id (:keechma.app/id app-state)
           controller (get-in app-state [:app-db controller-name])
           proxied-controller (get-proxied-controller app-state controller-name)
           {:keys [phase derived-state meta-state]} controller
@@ -627,48 +637,53 @@
           is-meta-state-identical (identical? meta-state proxied-meta-state)
           is-phase-identical (identical? phase proxied-phase)]
 
-      (if proxied-controller
-        (swap! app-state* update-in [:app-db controller-name] merge {:phase proxied-phase :derived-state proxied-derived-state :meta-state proxied-meta-state})
-        (swap! app-state* update-in [:app-db controller-name] merge {:phase :proxied-controller-stopped :derived-state nil :meta-state nil}))
+      (binding [*transaction-depth* (get *current-app-transaction-depth* app-id 0)]
 
-      (when (or (not is-derived-state-identical) (not is-phase-identical))
-        (if (transacting?)
-          (transaction-mark-dirty! app-state* controller-name)
-          (do
+        (if proxied-controller
+          (swap! app-state* update-in [:app-db controller-name] merge {:phase proxied-phase :derived-state proxied-derived-state :meta-state proxied-meta-state})
+          (swap! app-state* update-in [:app-db controller-name] merge {:phase :proxied-controller-stopped :derived-state nil :meta-state nil}))
+
+        (when (or (not is-derived-state-identical) (not is-phase-identical))
+          (if (transacting?)
             (transaction-mark-dirty! app-state* controller-name)
-            (reconcile-after-transaction! app-state*))))
+            (do
+              (transaction-mark-dirty! app-state* controller-name)
+              (reconcile-after-transaction! app-state*))))
 
-      (when-not is-meta-state-identical
-        (if (transacting?)
-          (transaction-mark-dirty-meta! app-state* controller-name)
-          (do
-            (notify-boundaries @app-state*)
-            (batched-notify-subscriptions-meta @app-state* #{controller-name})))))))
+        (when-not is-meta-state-identical
+          (if (transacting?)
+            (transaction-mark-dirty-meta! app-state* controller-name)
+            (do
+              (notify-boundaries @app-state*)
+              (batched-notify-subscriptions-meta @app-state* #{controller-name}))))))))
 
 (defn on-proxied-controller-dispatch [app-state* subscribed-controllers target-controller-name event payload]
-  (let [{:keys [batcher app-db]} @app-state*
-        controller-name (->> app-db
-                             (filter (fn [[controller-name controller]]
-                                       (and (contains? subscribed-controllers controller-name) (= :running (:phase controller)))))
+  (let [{:keys [batcher app-db] :as app-state} @app-state*
+        app-id (:keechma.app/id app-state)
+        controller-name (->> subscribed-controllers
+                             (select-keys app-db)
+                             (filter (fn [[_ controller]] (= :running (:phase controller))))
                              ffirst)]
-    (println controller-name subscribed-controllers)
     (when controller-name
       (batcher
        (fn []
-         (-dispatch app-state* target-controller-name event payload)
-         (notify-proxied-controllers-apps-on-dispatch app-state* controller-name target-controller-name event payload))))))
+         (binding [*transaction-depth* (get *current-app-transaction-depth* app-id 0)]
+           (-dispatch app-state* target-controller-name event payload)
+           (notify-proxied-controllers-apps-on-dispatch app-state* controller-name target-controller-name event payload)))))))
 
 (defn on-proxied-controller-broadcast [app-state* subscribed-controllers event payload]
-  (let [{:keys [batcher app-db]} @app-state*
-        controller-name (->> app-db
-                             (filter (fn [[controller-name controller]]
-                                       (and (contains? subscribed-controllers controller-name) (= :running (:phase controller)))))
+  (let [{:keys [batcher app-db] :as app-state} @app-state*
+        app-id (:keechma.app/id app-state)
+        controller-name (->> subscribed-controllers
+                             (select-keys app-db)
+                             (filter (fn [[_ controller]] (= :running (:phase controller))))
                              ffirst)]
     (when controller-name
       (batcher
        (fn []
-         (-broadcast app-state* event payload true)
-         (notify-proxied-controllers-apps-on-broadcast app-state* controller-name event payload))))))
+         (binding [*transaction-depth* (get *current-app-transaction-depth* app-id 0)]
+           (-broadcast app-state* event payload true)
+           (notify-proxied-controllers-apps-on-broadcast app-state* controller-name event payload)))))))
 
 (defn controller-start! [app-state* controller-name controller-type params]
   ;; Based on params so far, we're going to try to start the controller. There is one last chance to prevent it

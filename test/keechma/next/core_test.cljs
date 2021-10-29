@@ -2,7 +2,7 @@
   (:require
    [cljs.test :refer-macros [deftest is testing use-fixtures async]]
    [keechma.next.controller :as ctrl]
-   [keechma.next.core :refer [start! stop! subscribe subscribe-meta dispatch broadcast call get-derived-state get-meta-state transact]]
+   [keechma.next.core :refer [start! stop! subscribe subscribe-meta dispatch broadcast call get-derived-state get-meta-state transact get-app-state*]]
    [keechma.next.boundary :refer [make-boundary]]
    [keechma.next.conformer :refer [conform]]
    [cljs.spec.alpha :as s]))
@@ -49,7 +49,7 @@
   (log-cmd! ctrl :keechma.lifecycle/start)
   (inc counter-2))
 
-(deftest send-1
+(deftest dispatch-1
   (let [cmd-log* (atom [])
         app {:keechma/controllers {::counter-1 {:keechma.controller/params true
                                                 :cmd-log* cmd-log*}}}
@@ -65,7 +65,7 @@
            @cmd-log*))
     (stop! app-instance)))
 
-(deftest send-2
+(deftest dispatch-2
   (let [cmd-log* (atom [])
         app {:keechma/controllers {::counter-1 {:keechma.controller/params true
                                                 :cmd-log* cmd-log*}
@@ -88,7 +88,7 @@
             [::counter-1 :keechma.on/stop]]
            @cmd-log*))))
 
-(deftest send-3
+(deftest dispatch-3
   (let [cmd-log* (atom [])
         app {:keechma/controllers {::counter-1 {:keechma.controller/params true
                                                 :cmd-log* cmd-log*}
@@ -108,7 +108,7 @@
            @cmd-log*))
     (stop! app-instance)))
 
-(deftest send-4
+(deftest dispatch-4
   (let [cmd-log* (atom [])
         app {:keechma/controllers {::counter-1 {:keechma.controller/params true
                                                 :cmd-log* cmd-log*}
@@ -152,7 +152,7 @@
            @cmd-log*))
     (stop! app-instance)))
 
-(deftest send-5
+(deftest dispatch-5
   (let [cmd-log* (atom [])
         app {:keechma/controllers {::counter-1 {:keechma.controller/params true
                                                 :cmd-log* cmd-log*}
@@ -190,7 +190,7 @@
            @cmd-log*))
     (stop! app-instance)))
 
-(deftest send-6
+(deftest dispatch-6
   (let [cmd-log* (atom [])
         app {:keechma/controllers
              {::counter-1 {:keechma.controller/params true
@@ -1582,8 +1582,6 @@
            (get-derived-state app-boundary ::causal-a)))
     (is (= 4 @causal-b*))))
 
-
-
 (derive ::proxy-counter :keechma/controller)
 
 (defmethod ctrl/start ::proxy-counter [_ _ _ _]
@@ -1594,6 +1592,21 @@
   (case ev
     :inc (swap! state* inc)
     :dec (swap! state* dec)
+    nil))
+
+(derive ::proxy-counter-event-producer :keechma/controller)
+
+(defmethod ctrl/start ::proxy-counter-event-producer [_ _ _ _]
+  1)
+
+(defmethod ctrl/handle ::proxy-counter-event-producer [{:keys [state*] :as ctrl} ev _]
+  (case ev
+    :inc (do
+           (swap! state* inc)
+           (ctrl/dispatch ctrl ::proxy-counter :inc))
+    :dec (do
+           (swap! state* dec)
+           (ctrl/dispatch ctrl ::proxy-counter :dec))
     nil))
 
 (derive ::proxy-switch :keechma/controller)
@@ -2192,8 +2205,6 @@
         app-2-instance (start! app-2 app-1-instance)
         app-3-instance (start! app-2 app-2-instance)]
 
-
-
     (is (= [::called :foo]
            (call app-1-instance ::proxy-api-provider proxy-test-api-call :foo)
            (call app-2-instance ::proxy-api-provider proxy-test-api-call :foo)
@@ -2415,5 +2426,481 @@
 
     (is (= {::proxy-switch true
             ::proxy-event-receiver 2}
+           (get-derived-state app-3-instance)))
+
+    (dispatch app-2-instance ::proxy-switch :on)
+
+    (dispatch app-2-instance ::proxy-event-producer :broadcast)
+    (is (= {::proxy-event-producer nil
+            ::proxy-event-receiver 5}
+           (get-derived-state app-1-instance)))
+
+    (is (= {::proxy-switch true
+            ::proxy-event-producer nil
+            ::proxy-event-receiver 1}
+           (get-derived-state app-2-instance)))
+
+    (is (= {::proxy-switch true
+            ::proxy-event-producer nil
+            ::proxy-event-receiver 3}
+           (get-derived-state app-3-instance)))
+
+    (dispatch app-2-instance ::proxy-event-producer :dispatch)
+    (is (= {::proxy-event-producer nil
+            ::proxy-event-receiver 6}
+           (get-derived-state app-1-instance)))
+
+    (is (= {::proxy-switch true
+            ::proxy-event-producer nil
+            ::proxy-event-receiver 2}
+           (get-derived-state app-2-instance)))
+
+    (is (= {::proxy-switch true
+            ::proxy-event-producer nil
+            ::proxy-event-receiver 4}
+           (get-derived-state app-3-instance)))
+
+    (dispatch app-3-instance ::proxy-event-producer :broadcast)
+    (is (= {::proxy-event-producer nil
+            ::proxy-event-receiver 7}
+           (get-derived-state app-1-instance)))
+
+    (is (= {::proxy-switch true
+            ::proxy-event-producer nil
+            ::proxy-event-receiver 3}
+           (get-derived-state app-2-instance)))
+
+    (is (= {::proxy-switch true
+            ::proxy-event-producer nil
+            ::proxy-event-receiver 5}
+           (get-derived-state app-3-instance)))
+
+    (dispatch app-3-instance ::proxy-event-producer :dispatch)
+    (is (= {::proxy-event-producer nil
+            ::proxy-event-receiver 8}
+           (get-derived-state app-1-instance)))
+
+    (is (= {::proxy-switch true
+            ::proxy-event-producer nil
+            ::proxy-event-receiver 4}
+           (get-derived-state app-2-instance)))
+
+    (is (= {::proxy-switch true
+            ::proxy-event-producer nil
+            ::proxy-event-receiver 6}
            (get-derived-state app-3-instance)))))
 
+(deftest proxy-controllers+boundary-1
+  (let [app-1 {:keechma/controllers {::proxy-counter
+                                     #:keechma.controller {:params true}}}
+        app-1-instance (start! app-1)
+        app-1-boundary (make-boundary app-1-instance (fn [app-state _]
+                                                       (-> app-state ::proxy-counter odd?)))
+        app-2 {:keechma/controllers {::proxy-counter {:keechma.controller/proxy ::proxy-counter}}}
+        app-2-instance (start! app-2 app-1-boundary)
+        app-3 {:keechma/controllers {::proxy-counter {:keechma.controller/proxy ::proxy-counter}}}
+        app-3-instance (start! app-3 app-1-boundary)
+        app-3-boundary (make-boundary app-2-instance (fn [app-state _]
+                                                       (= 3 (::proxy-counter app-state))))
+        app-4 {:keechma/controllers {::proxy-counter {:keechma.controller/proxy ::proxy-counter}}}
+        app-4-instance (start! app-4 app-3-boundary)
+        app-1-proxy* (atom nil)
+        app-2-proxy* (atom nil)
+        app-3-proxy* (atom nil)
+        app-4-proxy* (atom nil)]
+
+    (subscribe app-1-instance ::proxy-counter #(reset! app-1-proxy* %))
+    (subscribe app-2-instance ::proxy-counter #(reset! app-2-proxy* %))
+    (subscribe app-3-instance ::proxy-counter #(reset! app-3-proxy* %))
+    (subscribe app-4-instance ::proxy-counter #(reset! app-4-proxy* %))
+
+    (is (= {::proxy-counter 1}
+           (get-derived-state app-1-instance)
+           (get-derived-state app-2-instance)
+           (get-derived-state app-3-instance)))
+    (is (= {::proxy-counter nil}
+           (get-derived-state app-4-instance)))
+    (is (= {::proxy-counter {:log [:keechma.on/start]}}
+           (get-meta-state app-1-instance)
+           (get-meta-state app-2-instance)
+           (get-meta-state app-3-instance)))
+    (is (= {::proxy-counter nil}
+           (get-meta-state app-4-instance)))
+
+    (dispatch app-1-instance ::proxy-counter :inc)
+    (is (= {::proxy-counter 2}
+           (get-derived-state app-1-instance)))
+
+    (is (= {::proxy-counter 1}
+           (get-derived-state app-2-instance)
+           (get-derived-state app-3-instance)))
+
+    (is (= {::proxy-counter nil}
+           (get-derived-state app-4-instance)))
+
+    (is (= {::proxy-counter {:log [:keechma.on/start :inc]}}
+           (get-meta-state app-1-instance)))
+
+    (is (= {::proxy-counter {:log [:keechma.on/start]}}
+           (get-meta-state app-2-instance)
+           (get-meta-state app-3-instance)))
+
+    (is (= {::proxy-counter nil}
+           (get-meta-state app-4-instance)))
+
+    (is (= 2 @app-1-proxy*))
+    (is (= nil @app-2-proxy* @app-3-proxy* @app-4-proxy*))
+
+    (dispatch app-1-instance ::proxy-counter :inc)
+    (is (= {::proxy-counter 3}
+           (get-derived-state app-1-instance)
+           (get-derived-state app-2-instance)
+           (get-derived-state app-3-instance)
+           (get-derived-state app-4-instance)))
+
+    (is (= {::proxy-counter {:log [:keechma.on/start :inc :inc]}}
+           (get-meta-state app-1-instance)
+           (get-meta-state app-2-instance)
+           (get-meta-state app-3-instance)
+           (get-meta-state app-4-instance)))
+
+    (dispatch app-1-instance ::proxy-counter :dec)
+    (is (= {::proxy-counter 2}
+           (get-derived-state app-1-instance)))
+
+    (is (= {::proxy-counter 3}
+           (get-derived-state app-2-instance)
+           (get-derived-state app-3-instance)
+           (get-derived-state app-4-instance)))
+
+    (is (= {::proxy-counter {:log [:keechma.on/start :inc :inc :dec]}}
+           (get-meta-state app-1-instance)))
+
+    (is (= {::proxy-counter {:log [:keechma.on/start :inc :inc]}}
+           (get-meta-state app-2-instance)
+           (get-meta-state app-3-instance)
+           (get-meta-state app-4-instance)))
+
+    (is (= 2 @app-1-proxy*))
+    (is (= 3 @app-2-proxy* @app-3-proxy* @app-4-proxy*))
+
+    (dispatch app-1-instance ::proxy-counter :dec)
+    (is (= {::proxy-counter 1}
+           (get-derived-state app-1-instance)))
+
+    (is (= {::proxy-counter 1}
+           (get-derived-state app-2-instance)
+           (get-derived-state app-3-instance)))
+
+    (is (= {::proxy-counter 3}
+           (get-derived-state app-4-instance)))
+
+    (is (= {::proxy-counter {:log [:keechma.on/start :inc :inc :dec :dec]}}
+           (get-meta-state app-2-instance)
+           (get-meta-state app-3-instance)
+           (get-meta-state app-1-instance)))
+
+    (is (= {::proxy-counter {:log [:keechma.on/start :inc :inc]}}
+           (get-meta-state app-4-instance)))
+
+    (is (= 1 @app-1-proxy* @app-2-proxy* @app-3-proxy*))
+    (is (= 3 @app-4-proxy*))))
+
+
+(deftest proxy-controllers+boundary-2
+  (let [app-1 {:keechma/controllers {::proxy-counter
+                                     #:keechma.controller {:params true}}}
+        app-1-instance (start! app-1)
+        app-1-boundary (make-boundary app-1-instance (fn [app-state _]
+                                                       (-> app-state ::proxy-counter odd?)))
+        app-2 {:keechma/controllers {::proxy-counter {:keechma.controller/proxy ::proxy-counter}}}
+        app-2-instance (start! app-2 app-1-boundary)
+        app-3 {:keechma/controllers {::proxy-counter {:keechma.controller/proxy ::proxy-counter}}}
+        app-3-instance (start! app-3 app-1-boundary)
+        app-3-boundary (make-boundary app-2-instance (fn [app-state _]
+                                                       (= 3 (::proxy-counter app-state))))
+        app-4 {:keechma/controllers {::proxy-counter {:keechma.controller/proxy ::proxy-counter}}}
+        app-4-instance (start! app-4 app-3-boundary)
+        app-1-proxy* (atom nil)
+        app-2-proxy* (atom nil)
+        app-3-proxy* (atom nil)
+        app-4-proxy* (atom nil)]
+
+    (subscribe app-1-instance ::proxy-counter #(reset! app-1-proxy* %))
+    (subscribe app-2-instance ::proxy-counter #(reset! app-2-proxy* %))
+    (subscribe app-3-instance ::proxy-counter #(reset! app-3-proxy* %))
+    (subscribe app-4-instance ::proxy-counter #(reset! app-4-proxy* %))
+
+    (is (= {::proxy-counter 1}
+           (get-derived-state app-1-instance)
+           (get-derived-state app-2-instance)
+           (get-derived-state app-3-instance)))
+    (is (= {::proxy-counter nil}
+           (get-derived-state app-4-instance)))
+    (is (= {::proxy-counter {:log [:keechma.on/start]}}
+           (get-meta-state app-1-instance)
+           (get-meta-state app-2-instance)
+           (get-meta-state app-3-instance)))
+    (is (= {::proxy-counter nil}
+           (get-meta-state app-4-instance)))
+
+    (dispatch app-2-instance ::proxy-counter :inc)
+    (is (= {::proxy-counter 2}
+           (get-derived-state app-1-instance)))
+
+    (is (= {::proxy-counter 1}
+           (get-derived-state app-2-instance)
+           (get-derived-state app-3-instance)))
+
+    (is (= {::proxy-counter nil}
+           (get-derived-state app-4-instance)))
+
+    (is (= {::proxy-counter {:log [:keechma.on/start :inc]}}
+           (get-meta-state app-1-instance)))
+
+    (is (= {::proxy-counter {:log [:keechma.on/start]}}
+           (get-meta-state app-2-instance)
+           (get-meta-state app-3-instance)))
+
+    (is (= {::proxy-counter nil}
+           (get-meta-state app-4-instance)))
+
+    (is (= 2 @app-1-proxy*))
+    (is (= nil @app-2-proxy* @app-3-proxy* @app-4-proxy*))
+
+    (dispatch app-1-instance ::proxy-counter :inc)
+    (is (= {::proxy-counter 3}
+           (get-derived-state app-1-instance)
+           (get-derived-state app-2-instance)
+           (get-derived-state app-3-instance)
+           (get-derived-state app-4-instance)))
+
+    (is (= {::proxy-counter {:log [:keechma.on/start :inc :inc]}}
+           (get-meta-state app-1-instance)
+           (get-meta-state app-2-instance)
+           (get-meta-state app-3-instance)
+           (get-meta-state app-4-instance)))
+
+    (dispatch app-3-instance ::proxy-counter :dec)
+    (is (= {::proxy-counter 2}
+           (get-derived-state app-1-instance)))
+
+    (is (= {::proxy-counter 3}
+           (get-derived-state app-2-instance)
+           (get-derived-state app-3-instance)
+           (get-derived-state app-4-instance)))
+
+    (is (= {::proxy-counter {:log [:keechma.on/start :inc :inc :dec]}}
+           (get-meta-state app-1-instance)))
+
+    (is (= {::proxy-counter {:log [:keechma.on/start :inc :inc]}}
+           (get-meta-state app-2-instance)
+           (get-meta-state app-3-instance)
+           (get-meta-state app-4-instance)))
+
+    (is (= 2 @app-1-proxy*))
+    (is (= 3 @app-2-proxy* @app-3-proxy* @app-4-proxy*))
+
+    ;; These dispatches should be no-op because boundaries should prevent it
+    (dispatch app-2-instance ::proxy-counter :dec)
+    (dispatch app-3-instance ::proxy-counter :dec)
+    (is (= {::proxy-counter 2}
+           (get-derived-state app-1-instance)))
+
+    (is (= {::proxy-counter 3}
+           (get-derived-state app-2-instance)
+           (get-derived-state app-3-instance)
+           (get-derived-state app-4-instance)))
+
+    (is (= {::proxy-counter {:log [:keechma.on/start :inc :inc :dec]}}
+           (get-meta-state app-1-instance)))
+
+    (is (= {::proxy-counter {:log [:keechma.on/start :inc :inc]}}
+           (get-meta-state app-2-instance)
+           (get-meta-state app-3-instance)
+           (get-meta-state app-4-instance)))
+
+    (is (= 2 @app-1-proxy*))
+    (is (= 3 @app-2-proxy* @app-3-proxy* @app-4-proxy*))))
+
+(deftest proxy-controllers+boundary-3
+  (let [app-1 {:keechma/controllers {::proxy-counter
+                                     #:keechma.controller {:params true}}}
+        app-1-instance (start! app-1)
+        app-1-boundary (make-boundary app-1-instance (fn [app-state _]
+                                                       (-> app-state ::proxy-counter odd?)))
+        app-2 {:keechma/controllers {::proxy-counter
+                                     #:keechma.controller {:proxy ::proxy-counter}
+                                     ::proxy-counter-event-producer
+                                     #:keechma.controller {:params true}}}
+        app-2-instance (start! app-2 app-1-boundary)
+
+        subscribe' (fn [app-instance controller-name state*]
+                     (subscribe app-instance controller-name #(swap! state* assoc controller-name %)))
+
+        app-1-proxy* (atom {})
+        app-2-proxy* (atom {})]
+
+    (subscribe' app-1-instance ::proxy-counter app-1-proxy*)
+    (subscribe' app-2-instance ::proxy-counter app-2-proxy*)
+    (subscribe' app-2-instance ::proxy-counter-event-producer app-2-proxy*)
+
+    (is (= {::proxy-counter 1}
+           (get-derived-state app-1-instance)))
+    (is (= {::proxy-counter 1
+            ::proxy-counter-event-producer 1}
+           (get-derived-state app-2-instance)))
+
+    (dispatch app-2-instance ::proxy-counter-event-producer :inc)
+    (is (= {::proxy-counter 2}
+           @app-1-proxy*
+           (get-derived-state app-1-instance)))
+
+    (is (= {::proxy-counter 1
+            ::proxy-counter-event-producer 2}
+           @app-2-proxy*
+           (get-derived-state app-2-instance)))
+
+    (dispatch app-2-instance ::proxy-counter-event-producer :inc)
+    (is (= {::proxy-counter 2}
+           @app-1-proxy*
+           (get-derived-state app-1-instance)))
+    (is (= {::proxy-counter 1
+            ::proxy-counter-event-producer 3}
+           @app-2-proxy*
+           (get-derived-state app-2-instance)))))
+
+(derive ::c-dispatch :keechma/controller)
+(derive ::c-broadcast :keechma/controller)
+(derive ::c-target :keechma/controller)
+
+(defmethod ctrl/start ::c-dispatch [_ _ _ _]
+  0)
+
+(defmethod ctrl/handle ::c-dispatch [{:keys [state*] :as ctrl} ev _]
+  (case ev
+    :from-c2 (do
+               (swap! state* inc)
+               (ctrl/dispatch ctrl ::c-target :from-c1))
+    nil))
+
+(defmethod ctrl/start ::c-broadcast [_ _ _ _]
+  0)
+
+(defmethod ctrl/handle ::c-broadcast [{:keys [state*] :as ctrl} ev _]
+  (case ev
+    :from-c2 (do
+               (swap! state* inc)
+               (ctrl/broadcast ctrl :from-c1))
+    nil))
+
+(defmethod ctrl/start ::c-target [_ _ _ _]
+  0)
+
+(defmethod ctrl/handle ::c-target [{:keys [state* to-controller] :as ctrl} ev _]
+  (case ev
+    :from-app (do
+                (ctrl/dispatch ctrl to-controller :from-c2)
+                (swap! state* inc))
+    :from-c1 (swap! state* inc)
+    nil))
+
+(deftest subscription-call-count-dispatch
+  (let [app {:keechma/controllers {::c-dispatch #:keechma.controller {:params true}
+                                   ::c-target #:keechma.controller {:params true
+                                                                    :_/to-controller ::c-dispatch}}}
+        subscription-call-count* (atom {})
+        app-instance (start! app)]
+    (subscribe app-instance ::c-dispatch #(swap! subscription-call-count* update ::c-dispatch inc))
+    (subscribe app-instance ::c-target #(swap! subscription-call-count* update ::c-target inc))
+
+    (dispatch app-instance ::c-target :from-app)
+
+    (is (= {::c-dispatch 1
+            ::c-target 1}
+           @subscription-call-count*))
+    (is (= {::c-dispatch 1
+            ::c-target 2}
+           (get-derived-state app-instance)))))
+
+(deftest subscription-call-count-proxy-controllers-dispatch
+  (let [app-1 {:keechma/controllers {::c-dispatch #:keechma.controller {:params true}}}
+        app-2 {:keechma/controllers {::c-dispatch #:keechma.controller {:proxy ::c-dispatch}
+                                     ::c-target #:keechma.controller {:params true
+                                                                      :_/to-controller ::c-dispatch}}}
+        subscription-call-count* (atom {})
+        subs* (atom {})
+        app-1-instance (start! app-1)
+        app-2-instance (start! app-2 app-1-instance)]
+    (subscribe app-1-instance ::c-dispatch #(swap! subscription-call-count* update ::c-dispatch inc))
+    (subscribe app-2-instance ::c-dispatch #(swap! subscription-call-count* update ::c-dispatch-proxy inc))
+    (subscribe app-2-instance ::c-target #(swap! subscription-call-count* update ::c-target inc))
+
+    (subscribe app-1-instance ::c-dispatch #(swap! subs* assoc ::c-dispatch %))
+    (subscribe app-2-instance ::c-dispatch #(swap! subs* assoc ::c-dispatch-proxy %))
+    (subscribe app-2-instance ::c-target #(swap! subs* assoc ::c-target %))
+
+    (dispatch app-2-instance ::c-target :from-app)
+
+    (is (= {::c-dispatch 1
+            ::c-dispatch-proxy 1
+            ::c-target 1}
+           @subscription-call-count*))
+    (is (= {::c-dispatch 1
+            ::c-target 2}
+           (get-derived-state app-2-instance)))
+    (is (= {::c-dispatch 1
+            ::c-dispatch-proxy 1
+            ::c-target 2}
+           @subs*))))
+
+
+(deftest subscription-call-count-broadcast
+  (let [app {:keechma/controllers {::c-broadcast #:keechma.controller {:params true}
+                                   ::c-target #:keechma.controller {:params true
+                                                                    :_/to-controller ::c-broadcast}}}
+        subscription-call-count* (atom {})
+        app-instance (start! app)]
+    (subscribe app-instance ::c-broadcast #(swap! subscription-call-count* update ::c-broadcast inc))
+    (subscribe app-instance ::c-target #(swap! subscription-call-count* update ::c-target inc))
+
+    (dispatch app-instance ::c-target :from-app)
+
+    (is (= {::c-broadcast 1
+            ::c-target 1}
+           @subscription-call-count*))
+    (is (= {::c-broadcast 1
+            ::c-target 2}
+           (get-derived-state app-instance)))))
+
+(deftest subscription-call-count-proxy-controllers-broadcast
+  (let [app-1 {:keechma/controllers {::c-broadcast #:keechma.controller {:params true}}}
+        app-2 {:keechma/controllers {::c-broadcast #:keechma.controller {:proxy ::c-broadcast}
+                                     ::c-target #:keechma.controller {:params true
+                                                                      :_/to-controller ::c-broadcast}}}
+        subscription-call-count* (atom {})
+        subs* (atom {})
+        app-1-instance (start! app-1)
+        app-2-instance (start! app-2 app-1-instance)]
+
+    (subscribe app-1-instance ::c-broadcast #(swap! subscription-call-count* update ::c-broadcast inc))
+    (subscribe app-2-instance ::c-broadcast #(swap! subscription-call-count* update ::c-broadcast-proxy inc))
+    (subscribe app-2-instance ::c-target #(swap! subscription-call-count* update ::c-target inc))
+
+    (subscribe app-1-instance ::c-broadcast #(swap! subs* assoc ::c-broadcast %))
+    (subscribe app-2-instance ::c-broadcast #(swap! subs* assoc ::c-broadcast-proxy %))
+    (subscribe app-2-instance ::c-target #(swap! subs* assoc ::c-target %))
+
+    (dispatch app-2-instance ::c-target :from-app)
+
+    (is (= {::c-broadcast 1
+            ::c-broadcast-proxy 1
+            ::c-target 1}
+           @subscription-call-count*))
+    (is (= {::c-broadcast 1
+            ::c-target 2}
+           (get-derived-state app-2-instance)))
+    (is (= {::c-broadcast 1
+            ::c-broadcast-proxy 1
+            ::c-target 2}
+           @subs*))))
