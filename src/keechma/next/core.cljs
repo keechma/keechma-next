@@ -646,7 +646,7 @@
           {proxied-phase :phase proxied-derived-state :derived-state proxied-meta-state :meta-state} proxied-controller
           is-derived-state-identical (identical? derived-state proxied-derived-state)
           is-meta-state-identical (identical? meta-state proxied-meta-state)
-          is-phase-identical (identical? phase proxied-phase)]
+          is-phase-equal (= phase proxied-phase)]
 
       (binding [*transaction-depth* (get *app-id->transaction-depth* app-id 0)]
 
@@ -654,7 +654,7 @@
           (swap! app-state* update-in [:app-db controller-name] merge {:phase proxied-phase :derived-state proxied-derived-state :meta-state proxied-meta-state})
           (swap! app-state* update-in [:app-db controller-name] merge {:phase :proxied-controller-stopped :derived-state nil :meta-state nil}))
 
-        (when (or (not is-derived-state-identical) (not is-phase-identical))
+        (when (or (not is-derived-state-identical) (not is-phase-equal))
           (if (transacting?)
             (transaction-mark-dirty! app-state* controller-name)
             (do
