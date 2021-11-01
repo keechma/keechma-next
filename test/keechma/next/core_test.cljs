@@ -3,7 +3,7 @@
    [cljs.test :refer-macros [deftest is testing use-fixtures async]]
    [keechma.next.controller :as ctrl]
    [keechma.next.core :refer [start! stop! subscribe subscribe-meta dispatch broadcast call get-derived-state get-meta-state transact get-app-state*]]
-   [keechma.next.boundary :refer [make-boundary]]
+   [keechma.next.fence :refer [make-fence]]
    [keechma.next.conformer :refer [conform]]
    [cljs.spec.alpha :as s]))
 
@@ -1551,35 +1551,35 @@
     (is (= :foo (get-meta-state app-instance ::meta-controller)))
     (is (= :foo @meta-state*))))
 
-(deftest boundary
+(deftest fence
   (let [app {:keechma/controllers {::causal-a {:keechma.controller/params true}
                                    ::causal-b {:keechma.controller/params true
                                                :keechma.controller/deps [::causal-a]}}}
         causal-b* (atom nil)
         app-instance (start! app)
-        app-boundary (make-boundary app-instance (fn [app-state _]
-                                                   (-> app-state ::causal-a odd?)))]
-    (subscribe app-boundary ::causal-b #(reset! causal-b* %))
+        app-fence (make-fence app-instance (fn [app-state _]
+                                             (-> app-state ::causal-a odd?)))]
+    (subscribe app-fence ::causal-b #(reset! causal-b* %))
     (is (= {::causal-a 1 ::causal-b 2}
            (get-derived-state app-instance)
-           (get-derived-state app-boundary)))
+           (get-derived-state app-fence)))
     (is (= 1
            (get-derived-state app-instance ::causal-a)
-           (get-derived-state app-boundary ::causal-a)))
+           (get-derived-state app-fence ::causal-a)))
     (is (nil? @causal-b*))
     (dispatch app-instance ::causal-a :inc)
     (is (= {::causal-a 2 ::causal-b 3}
            (get-derived-state app-instance)))
     (is (= {::causal-a 1 ::causal-b 2}
-           (get-derived-state app-boundary)))
+           (get-derived-state app-fence)))
     (is (nil? @causal-b*))
     (dispatch app-instance ::causal-a :inc)
     (is (= {::causal-a 3 ::causal-b 4}
            (get-derived-state app-instance)
-           (get-derived-state app-boundary)))
+           (get-derived-state app-fence)))
     (is (= 3
            (get-derived-state app-instance ::causal-a)
-           (get-derived-state app-boundary ::causal-a)))
+           (get-derived-state app-fence ::causal-a)))
     (is (= 4 @causal-b*))))
 
 (derive ::proxy-counter :keechma/controller)
@@ -2613,20 +2613,20 @@
            (get-derived-state app-3-instance)))))
 
 
-(deftest proxy-controllers+boundary-1
+(deftest proxy-controllers+fence-1
   (let [app-1 {:keechma/controllers {::proxy-counter
                                      #:keechma.controller {:params true}}}
         app-1-instance (start! app-1)
-        app-1-boundary (make-boundary app-1-instance (fn [app-state _]
-                                                       (-> app-state ::proxy-counter odd?)))
+        app-1-fence (make-fence app-1-instance (fn [app-state _]
+                                                 (-> app-state ::proxy-counter odd?)))
         app-2 {:keechma/controllers {::proxy-counter {:keechma.controller/proxy ::proxy-counter}}}
-        app-2-instance (start! app-2 app-1-boundary)
+        app-2-instance (start! app-2 app-1-fence)
         app-3 {:keechma/controllers {::proxy-counter {:keechma.controller/proxy ::proxy-counter}}}
-        app-3-instance (start! app-3 app-1-boundary)
-        app-3-boundary (make-boundary app-2-instance (fn [app-state _]
-                                                       (= 3 (::proxy-counter app-state))))
+        app-3-instance (start! app-3 app-1-fence)
+        app-3-fence (make-fence app-2-instance (fn [app-state _]
+                                                 (= 3 (::proxy-counter app-state))))
         app-4 {:keechma/controllers {::proxy-counter {:keechma.controller/proxy ::proxy-counter}}}
-        app-4-instance (start! app-4 app-3-boundary)
+        app-4-instance (start! app-4 app-3-fence)
         app-1-proxy* (atom nil)
         app-2-proxy* (atom nil)
         app-3-proxy* (atom nil)
@@ -2730,20 +2730,20 @@
     (is (= 3 @app-4-proxy*))))
 
 
-(deftest proxy-controllers+boundary-2
+(deftest proxy-controllers+fence-2
   (let [app-1 {:keechma/controllers {::proxy-counter
                                      #:keechma.controller {:params true}}}
         app-1-instance (start! app-1)
-        app-1-boundary (make-boundary app-1-instance (fn [app-state _]
-                                                       (-> app-state ::proxy-counter odd?)))
+        app-1-fence (make-fence app-1-instance (fn [app-state _]
+                                                 (-> app-state ::proxy-counter odd?)))
         app-2 {:keechma/controllers {::proxy-counter {:keechma.controller/proxy ::proxy-counter}}}
-        app-2-instance (start! app-2 app-1-boundary)
+        app-2-instance (start! app-2 app-1-fence)
         app-3 {:keechma/controllers {::proxy-counter {:keechma.controller/proxy ::proxy-counter}}}
-        app-3-instance (start! app-3 app-1-boundary)
-        app-3-boundary (make-boundary app-2-instance (fn [app-state _]
-                                                       (= 3 (::proxy-counter app-state))))
+        app-3-instance (start! app-3 app-1-fence)
+        app-3-fence (make-fence app-2-instance (fn [app-state _]
+                                                 (= 3 (::proxy-counter app-state))))
         app-4 {:keechma/controllers {::proxy-counter {:keechma.controller/proxy ::proxy-counter}}}
-        app-4-instance (start! app-4 app-3-boundary)
+        app-4-instance (start! app-4 app-3-fence)
         app-1-proxy* (atom nil)
         app-2-proxy* (atom nil)
         app-3-proxy* (atom nil)
@@ -2824,7 +2824,7 @@
     (is (= 2 @app-1-proxy*))
     (is (= 3 @app-2-proxy* @app-3-proxy* @app-4-proxy*))
 
-    ;; These dispatches should be no-op because boundaries should prevent it
+    ;; These dispatches should be no-op because fences should prevent it
     (dispatch app-2-instance ::proxy-counter :dec)
     (dispatch app-3-instance ::proxy-counter :dec)
     (is (= {::proxy-counter 2}
@@ -2846,17 +2846,17 @@
     (is (= 2 @app-1-proxy*))
     (is (= 3 @app-2-proxy* @app-3-proxy* @app-4-proxy*))))
 
-(deftest proxy-controllers+boundary-3
+(deftest proxy-controllers+fence-3
   (let [app-1 {:keechma/controllers {::proxy-counter
                                      #:keechma.controller {:params true}}}
         app-1-instance (start! app-1)
-        app-1-boundary (make-boundary app-1-instance (fn [app-state _]
-                                                       (-> app-state ::proxy-counter odd?)))
+        app-1-fence (make-fence app-1-instance (fn [app-state _]
+                                                 (-> app-state ::proxy-counter odd?)))
         app-2 {:keechma/controllers {::proxy-counter
                                      #:keechma.controller {:proxy ::proxy-counter}
                                      ::proxy-counter-event-producer
                                      #:keechma.controller {:params true}}}
-        app-2-instance (start! app-2 app-1-boundary)
+        app-2-instance (start! app-2 app-1-fence)
 
         subscribe' (fn [app-instance controller-name state*]
                      (subscribe app-instance controller-name #(swap! state* assoc controller-name %)))

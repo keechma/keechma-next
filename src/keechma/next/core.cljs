@@ -550,13 +550,13 @@
           (sub derived-state))))
     (notify-subscriptions-meta app-state)))
 
-(defn notify-boundaries [app-state]
-  (let [boundaries-sub-fns (-> app-state :boundaries vals)]
-    (when (seq boundaries-sub-fns)
+(defn notify-fences [app-state]
+  (let [fences-sub-fns (-> app-state :fences vals)]
+    (when (seq fences-sub-fns)
       (let [derived-app-state (get-derived-app-state app-state)
             app-meta-state (get-app-meta-state app-state)]
-        (doseq [boundary-sub-fn boundaries-sub-fns]
-          (boundary-sub-fn derived-app-state app-meta-state))))))
+        (doseq [fence-sub-fn fences-sub-fns]
+          (fence-sub-fn derived-app-state app-meta-state))))))
 
 (defn batched-notify-subscriptions-meta
   ([{:keys [batcher] :as app-state}]
@@ -613,7 +613,7 @@
     (if (transacting?)
       (transaction-mark-dirty-meta! app-state* controller-name)
       (do
-        (notify-boundaries @app-state*)
+        (notify-fences @app-state*)
         (batched-notify-subscriptions-meta @app-state* #{controller-name})))))
 
 (defn get-proxied-controller [app-state controller-name]
@@ -654,7 +654,7 @@
           (if (transacting?)
             (transaction-mark-dirty-meta! app-state* controller-name)
             (do
-              (notify-boundaries @app-state*)
+              (notify-fences @app-state*)
               (batched-notify-subscriptions-meta @app-state* #{controller-name}))))))))
 
 (defn on-proxied-controller-dispatch [app-state* subscribed-controllers target-controller-name event payload]
@@ -953,13 +953,13 @@
             (if (seq dirty)
               (recur app-state*)
               (do
-                (notify-boundaries @app-state*)
+                (notify-fences @app-state*)
                 (batched-notify-subscriptions @app-state*)))))
 
         (seq dirty-meta)
         (do
           (swap! app-state* assoc-empty-transaction)
-          (notify-boundaries @app-state*)
+          (notify-fences @app-state*)
           (batched-notify-subscriptions-meta @app-state* dirty-meta))))))
 
 (defn reconcile-initial!
@@ -1040,10 +1040,10 @@
          (let [sub-id (-> 'sub-meta-id gensym keyword)]
            (swap! app-state* assoc-in [:subscriptions-meta controller-name sub-id] sub-fn)
            (partial unsubscribe-meta! app-state* controller-name sub-id)))
-       (-subscribe-boundary [_ sub-fn]
-         (let [boundary-sub-id (-> 'boundary-sub-id gensym keyword)]
-           (swap! app-state* assoc-in [:boundaries boundary-sub-id] sub-fn)
-           #(swap! app-state* dissoc-in [:boundaries boundary-sub-id])))
+       (-subscribe-fence [_ sub-fn]
+         (let [fence-sub-id (-> 'fence-sub-id gensym keyword)]
+           (swap! app-state* assoc-in [:fences fence-sub-id] sub-fn)
+           #(swap! app-state* dissoc-in [:fences fence-sub-id])))
        (-subscribe-on-controller-dispatch [_ app-id controller-name subscribing-controller-name sub-fn]
          (validate-controller-exists! @app-state* controller-name)
          (swap! app-state* assoc-in [:subscriptions-on-controller-dispatch controller-name app-id subscribing-controller-name] sub-fn)

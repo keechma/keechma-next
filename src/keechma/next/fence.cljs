@@ -1,5 +1,5 @@
-(ns keechma.next.boundary
-  ^{:doc "Boundary allows you to wrap an app instance and synchronize changes only when a predicate-fn returns true. If the predicate-fn returns false
+(ns keechma.next.fence
+  ^{:doc "Fence allows you to wrap an app instance and synchronize changes only when a predicate-fn returns true. If the predicate-fn returns false
           subscriptions will return last value captured while the predicate-fn was returning true. Broadcasts and dispatches will be no-op while the
           predicate-fn returns false."}
   (:require [keechma.next.protocols :as pt]))
@@ -9,8 +9,8 @@
     (when @is-running*
       (apply sub-fn args))))
 
-(defn make-boundary [app-instance predicate-fn]
-  (let [boundary-id (-> 'boundary-sub-id gensym str)
+(defn make-fence [app-instance predicate-fn]
+  (let [fence-id (-> 'fence-sub-id gensym str)
 
         derived-app-state (-> app-instance pt/-get-derived-state)
         app-meta-state (-> app-instance pt/-get-meta-state)
@@ -26,7 +26,7 @@
                            (vreset! derived-app-state* derived-app-state)
                            (vreset! app-meta-state* app-meta-state))
                          (vreset! is-running* is-running)))
-        unsubscribe (pt/-subscribe-boundary app-instance subscription)]
+        unsubscribe (pt/-subscribe-fence app-instance subscription)]
     (reify
       pt/IRootAppInstance
       (-stop! [_]
@@ -37,11 +37,11 @@
       (-subscribe-meta [_ controller-name sub-fn]
         (let [wrapped-sub-fn (wrap-sub-fn sub-fn is-running*)]
           (pt/-subscribe-meta app-instance controller-name wrapped-sub-fn)))
-      (-subscribe-boundary [_ sub-fn]
+      (-subscribe-fence [_ sub-fn]
         (let [wrapped-sub-fn (fn [derived-app-state app-meta-state]
                                (when (predicate-fn derived-app-state app-meta-state)
                                  (sub-fn derived-app-state app-meta-state)))]
-          (pt/-subscribe-boundary app-instance wrapped-sub-fn)))
+          (pt/-subscribe-fence app-instance wrapped-sub-fn)))
       (-subscribe-on-controller-dispatch [this app-id controller-name subscribing-controller-name sub-fn]
         (let [wrapped-sub-fn (wrap-sub-fn sub-fn is-running*)]
           (pt/-subscribe-on-controller-dispatch app-instance app-id controller-name subscribing-controller-name wrapped-sub-fn)))
@@ -81,4 +81,4 @@
         (when @is-running*
           (pt/-call app-instance controller-name api-fn args)))
       (-get-id [this]
-        boundary-id))))
+        fence-id))))
