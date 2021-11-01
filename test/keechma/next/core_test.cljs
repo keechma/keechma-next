@@ -3029,3 +3029,131 @@
             ::c-broadcast-proxy 2
             ::c-target 2}
            @subs*))))
+
+(deftest global-controllers-are-started-first-1
+  (let [cmd-log* (atom [])
+        app {:keechma/controllers {::c1 {:keechma.controller/params true
+                                         :keechma.controller/type ::counter-1
+                                         :cmd-log* cmd-log*}
+                                   ::c2 {:keechma.controller/params true
+                                         :keechma.controller/type ::counter-1
+                                         :cmd-log* cmd-log*}
+                                   ::c3 {:keechma.controller/params true
+                                         :keechma.controller/type ::counter-1
+                                         :cmd-log* cmd-log*}
+                                   ::c4 {:keechma.controller/params true
+                                         :keechma.controller/type ::counter-1
+                                         :keechma.controller/is-global true
+                                         :cmd-log* cmd-log*}}}]
+    (start! app)
+    (is (= [::c4 :keechma.lifecycle/start]
+           (-> cmd-log* deref first)))))
+
+(deftest global-controllers-are-started-first-1a
+  (let [cmd-log* (atom [])
+        app {:keechma/controllers {::c1 {:keechma.controller/params true
+                                         :keechma.controller/type ::counter-1
+                                         :cmd-log* cmd-log*}
+                                   ::c2 {:keechma.controller/params true
+                                         :keechma.controller/type ::counter-1
+                                         :cmd-log* cmd-log*}
+                                   ::c3 {:keechma.controller/params true
+                                         :keechma.controller/type ::counter-1
+                                         :cmd-log* cmd-log*}
+                                   ::c4 {:keechma.controller/params true
+                                         :keechma.controller/type ::counter-1
+                                         :cmd-log* cmd-log*}
+                                   ::c5 {:keechma.controller/params true
+                                         :keechma.controller/type ::counter-1
+                                         :cmd-log* cmd-log*}
+                                   ::c6 {:keechma.controller/params true
+                                         :keechma.controller/type ::counter-1
+                                         :cmd-log* cmd-log*}
+                                   ::c7 {:keechma.controller/params true
+                                         :keechma.controller/type ::counter-1
+                                         :cmd-log* cmd-log*}
+                                   ::c8 {:keechma.controller/params true
+                                         :keechma.controller/type ::counter-1
+                                         :cmd-log* cmd-log*}
+                                   ::c9 {:keechma.controller/params true
+                                         :keechma.controller/type ::counter-1
+                                         :cmd-log* cmd-log*}
+                                   ::c10 {:keechma.controller/params true
+                                          :keechma.controller/type ::counter-1
+                                          :keechma.controller/is-global true
+                                          :cmd-log* cmd-log*}}}]
+    (start! app)
+    (is (= [::c10 :keechma.lifecycle/start]
+           (-> cmd-log* deref first)))))
+
+(deftest global-controllers-are-started-first-2
+  (let [cmd-log* (atom [])
+        app {:keechma/controllers {::c1 {:keechma.controller/params true
+                                         :keechma.controller/type ::counter-1
+                                         :cmd-log* cmd-log*}
+                                   ::c2 {:keechma.controller/params true
+                                         :keechma.controller/type ::counter-1
+                                         :keechma.controller/deps [::c1]
+                                         :cmd-log* cmd-log*}
+                                   ::c3 {:keechma.controller/params true
+                                         :keechma.controller/type ::counter-1
+                                         :keechma.controller/deps [::c1]
+                                         :cmd-log* cmd-log*}
+                                   ::c4 {:keechma.controller/params true
+                                         :keechma.controller/type ::counter-1
+                                         :keechma.controller/is-global true
+                                         :keechma.controller/deps [::c1]
+                                         :cmd-log* cmd-log*}}}]
+    (start! app)
+    (is (= [[::c1 :keechma.lifecycle/start]
+            [::c1 :keechma.on/start]
+            [::c4 :keechma.lifecycle/start]]
+           (take 3 @cmd-log*)))))
+
+(deftest global-controllers-are-started-first-2a
+  (let [cmd-log* (atom [])
+        app {:keechma/controllers {::c1 {:keechma.controller/params true
+                                         :keechma.controller/type ::counter-1
+                                         :cmd-log* cmd-log*}
+                                   ::c2 {:keechma.controller/params true
+                                         :keechma.controller/type ::counter-1
+                                         :keechma.controller/deps [::c1]
+                                         :cmd-log* cmd-log*}
+                                   ::c3 {:keechma.controller/params true
+                                         :keechma.controller/type ::counter-1
+                                         :keechma.controller/deps [::c1]
+                                         :cmd-log* cmd-log*}
+                                   ::c4 {:keechma.controller/params true
+                                         :keechma.controller/type ::counter-1
+                                         :keechma.controller/deps [::c1]
+                                         :cmd-log* cmd-log*}
+                                   ::c5 {:keechma.controller/params true
+                                         :keechma.controller/type ::counter-1
+                                         :keechma.controller/deps [::c1]
+                                         :cmd-log* cmd-log*}
+                                   ::c6 {:keechma.controller/params true
+                                         :keechma.controller/type ::counter-1
+                                         :keechma.controller/deps [::c1]
+                                         :cmd-log* cmd-log*}
+                                   ::c7 {:keechma.controller/params true
+                                         :keechma.controller/type ::counter-1
+                                         :keechma.controller/deps [::c1]
+                                         :cmd-log* cmd-log*}
+                                   ::c8 {:keechma.controller/params true
+                                         :keechma.controller/type ::counter-1
+                                         :keechma.controller/deps [::c1]
+                                         :cmd-log* cmd-log*}
+                                   ::c9 {:keechma.controller/params true
+                                         :keechma.controller/type ::counter-1
+                                         :keechma.controller/deps [::c1]
+                                         :cmd-log* cmd-log*}
+                                   ::c10 {:keechma.controller/params true
+                                          :keechma.controller/type ::counter-1
+                                          :keechma.controller/is-global true
+                                          :keechma.controller/deps [::c1]
+                                          :cmd-log* cmd-log*}}}]
+    (start! app)
+    (is (= [[::c1 :keechma.lifecycle/start]
+            [::c1 :keechma.on/start]
+            [::c10 :keechma.lifecycle/start]]
+           (take 3 @cmd-log*)))))

@@ -2,7 +2,7 @@
   (:require
    [keechma.next.graph :refer [subgraph-reachable-from subgraph-reachable-from-set]]
    [cljs.test :refer-macros [deftest is testing use-fixtures async]]
-   [com.stuartsierra.dependency :as dep]))
+   [weavejester.dependency :as dep]))
 
 ;;       :a
 ;;      / |

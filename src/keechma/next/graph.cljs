@@ -1,5 +1,5 @@
 (ns keechma.next.graph
-  (:require [com.stuartsierra.dependency :as dep]
+  (:require [weavejester.dependency :as dep]
             [clojure.set :as set]))
 
 (defn cleanup-dependencies [nodes dependencies]

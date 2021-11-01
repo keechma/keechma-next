@@ -6,7 +6,7 @@
    [keechma.next.protocols :as protocols :refer [IAppInstance IRootAppInstance]]
    [keechma.next.conformer :refer [conform conform-factory-produced]]
    [medley.core :refer [dissoc-in]]
-   [com.stuartsierra.dependency :as dep]
+   [weavejester.dependency :as dep]
    [clojure.set :as set]))
 
 (declare -dispatch)
@@ -172,14 +172,25 @@
        (interpose :apps)
        vec))
 
+(defn make-controller-sort-comparator [controllers]
+  (fn [ctrl-1 ctrl-2]
+    (let [ctrl-1-is-global (get-in controllers [ctrl-1 :keechma.controller/is-global])
+          ctrl-2-is-global (get-in controllers [ctrl-2 :keechma.controller/is-global])]
+      (cond
+        (= ctrl-1-is-global ctrl-2-is-global) 0
+        ctrl-1-is-global -1
+        :else 1))))
+
 (defn get-sorted-controllers-for-app [app-state path]
   (let [{:keys [controllers controllers-graph]} (get-in app-state (get-app-store-path path))
+        controller-sort-comparator (make-controller-sort-comparator controllers)
         nodeset              (dep/nodes controllers-graph)
         sorted-controllers   (->> controllers-graph
-                                  dep/topo-sort
+                                  (dep/topo-sort controller-sort-comparator)
                                   (filterv #(contains? controllers %)))
         isolated-controllers (->> (keys controllers)
-                                  (filter #(not (contains? nodeset %))))]
+                                  (filter #(not (contains? nodeset %)))
+                                  (sort controller-sort-comparator))]
     (concat isolated-controllers sorted-controllers)))
 
 (defn unsubscribe! [app-state* controller-name sub-id]
@@ -905,8 +916,9 @@
   (let [app-state    @app-state*
         {:keys [controllers-graph]} (get-in app-state (get-app-store-path path))
         subgraph     (subgraph-reachable-from-set controllers-graph dirty)
-        ;; TODO: Write test for this. Only reconcile controllers that belong to this app
-        to-reconcile (filterv #(= path (get-in app-state [:controller->app-index %])) (dep/topo-sort subgraph))]
+        to-reconcile (->> subgraph
+                          dep/topo-sort
+                          (filterv #(= path (get-in app-state [:controller->app-index %]))))]
 
     (reconcile-controllers! app-state* to-reconcile)
 
