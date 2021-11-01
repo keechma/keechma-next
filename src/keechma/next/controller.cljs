@@ -83,6 +83,13 @@
      (protocols/-dispatch app controller-name event payload)
      nil)))
 
+(defn dispatch-self
+  "Dispatches an event to the current controller. Acts same as calling `handle` directly, but will go through the Keechma routing layer and always return nil"
+  ([controller event]
+   (dispatch-self controller event nil))
+  ([controller event payload]
+   (dispatch controller (:keechma.controller/name controller) event payload)))
+
 (defn broadcast
   "Broadcasts an event to all running controllers."
   ([controller event] (broadcast controller event nil))
@@ -101,6 +108,13 @@
   "Calls an API fn on the controller's exposed API object."
   [controller controller-name api-fn & args]
   (let [app (:keechma/app controller)]
+    (protocols/-call app controller-name api-fn args)))
+
+(defn call-self
+  "Calls an API fn on the current controller's exposed API object."
+  [controller api-fn & args]
+  (let [app (:keechma/app controller)
+        controller-name (:keechma.controller/name controller)]
     (protocols/-call app controller-name api-fn args)))
 
 (defn get-api*
