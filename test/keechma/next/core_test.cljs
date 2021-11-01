@@ -5,6 +5,7 @@
    [keechma.next.core :refer [start! stop! subscribe subscribe-meta dispatch broadcast call get-derived-state get-meta-state transact get-app-state*]]
    [keechma.next.fence :refer [make-fence]]
    [keechma.next.conformer :refer [conform]]
+   [keechma.next.event :as event]
    [cljs.spec.alpha :as s]))
 
 #_(use-fixtures :once {:before (fn [] (js/console.clear))})
