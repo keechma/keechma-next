@@ -2490,6 +2490,129 @@
             ::proxy-event-receiver 6}
            (get-derived-state app-3-instance)))))
 
+
+(deftest proxy-controllers-8
+  (let [app-1 {:keechma/controllers {::proxy-event-producer
+                                     #:keechma.controller {:params true}
+                                     ::proxy-event-receiver
+                                     #:keechma.controller {:params true}}}
+        app-1-instance (start! app-1)
+        app-2 {:keechma/controllers {::proxy-event-producer
+                                     #:keechma.controller {:proxy ::proxy-event-producer}
+                                     [::proxy-event-receiver :proxy-1]
+                                     #:keechma.controller {:proxy ::proxy-event-receiver}
+                                     [::proxy-event-receiver :proxy-2]
+                                     #:keechma.controller {:proxy ::proxy-event-receiver}
+                                     ::proxy-event-receiver
+                                     #:keechma.controller {:params true}
+                                     ::proxy-event-receiver-foo
+                                     #:keechma.controller {:params true
+                                                           :type ::proxy-event-receiver}}}
+        app-2-instance (start! app-2 app-1-instance)
+        app-3 {:keechma/controllers {::proxy-event-producer
+                                     #:keechma.controller {:proxy ::proxy-event-producer}
+                                     [::proxy-event-receiver :proxy-1]
+                                     #:keechma.controller {:proxy [::proxy-event-receiver :proxy-1]}
+                                     [::proxy-event-receiver :proxy-2]
+                                     #:keechma.controller {:proxy [::proxy-event-receiver :proxy-2]}
+                                     ::proxy-event-receiver
+                                     #:keechma.controller {:params true}
+                                     ::proxy-event-receiver-foo
+                                     #:keechma.controller {:params true
+                                                           :type ::proxy-event-receiver}}}
+        app-3-instance (start! app-3 app-2-instance)]
+
+    (is (= {::proxy-event-producer nil
+            ::proxy-event-receiver 0}
+           (get-derived-state app-1-instance)))
+
+    (is (= {::proxy-event-producer nil
+            [::proxy-event-receiver :proxy-1] 0
+            [::proxy-event-receiver :proxy-2] 0
+            ::proxy-event-receiver 0
+            ::proxy-event-receiver-foo 0}
+           (get-derived-state app-2-instance)
+           (get-derived-state app-3-instance)))
+
+    (dispatch app-1-instance ::proxy-event-producer :dispatch)
+    (is (= {::proxy-event-producer nil
+            ::proxy-event-receiver 1}
+           (get-derived-state app-1-instance)))
+
+    (is (= {::proxy-event-producer nil
+            [::proxy-event-receiver :proxy-1] 1
+            [::proxy-event-receiver :proxy-2] 1
+            ::proxy-event-receiver 1
+            ::proxy-event-receiver-foo 0}
+           (get-derived-state app-2-instance)
+           (get-derived-state app-3-instance)))
+
+    (dispatch app-1-instance ::proxy-event-producer :broadcast)
+    (is (= {::proxy-event-producer nil
+            ::proxy-event-receiver 2}
+           (get-derived-state app-1-instance)))
+
+    (is (= {::proxy-event-producer nil
+            [::proxy-event-receiver :proxy-1] 2
+            [::proxy-event-receiver :proxy-2] 2
+            ::proxy-event-receiver 2
+            ::proxy-event-receiver-foo 1}
+           (get-derived-state app-2-instance)
+           (get-derived-state app-3-instance)))
+
+    (dispatch app-2-instance ::proxy-event-producer :dispatch)
+    (is (= {::proxy-event-producer nil
+            ::proxy-event-receiver 3}
+           (get-derived-state app-1-instance)))
+
+    (is (= {::proxy-event-producer nil
+            [::proxy-event-receiver :proxy-1] 3
+            [::proxy-event-receiver :proxy-2] 3
+            ::proxy-event-receiver 3
+            ::proxy-event-receiver-foo 1}
+           (get-derived-state app-2-instance)
+           (get-derived-state app-3-instance)))
+
+    (dispatch app-2-instance ::proxy-event-producer :broadcast)
+    (is (= {::proxy-event-producer nil
+            ::proxy-event-receiver 4}
+           (get-derived-state app-1-instance)))
+
+    (is (= {::proxy-event-producer nil
+            [::proxy-event-receiver :proxy-1] 4
+            [::proxy-event-receiver :proxy-2] 4
+            ::proxy-event-receiver 4
+            ::proxy-event-receiver-foo 2}
+           (get-derived-state app-2-instance)
+           (get-derived-state app-3-instance)))
+
+    (dispatch app-3-instance ::proxy-event-producer :dispatch)
+    (is (= {::proxy-event-producer nil
+            ::proxy-event-receiver 5}
+           (get-derived-state app-1-instance)))
+
+    (is (= {::proxy-event-producer nil
+            [::proxy-event-receiver :proxy-1] 5
+            [::proxy-event-receiver :proxy-2] 5
+            ::proxy-event-receiver 5
+            ::proxy-event-receiver-foo 2}
+           (get-derived-state app-2-instance)
+           (get-derived-state app-3-instance)))
+
+    (dispatch app-3-instance ::proxy-event-producer :broadcast)
+    (is (= {::proxy-event-producer nil
+            ::proxy-event-receiver 6}
+           (get-derived-state app-1-instance)))
+
+    (is (= {::proxy-event-producer nil
+            [::proxy-event-receiver :proxy-1] 6
+            [::proxy-event-receiver :proxy-2] 6
+            ::proxy-event-receiver 6
+            ::proxy-event-receiver-foo 3}
+           (get-derived-state app-2-instance)
+           (get-derived-state app-3-instance)))))
+
+
 (deftest proxy-controllers+boundary-1
   (let [app-1 {:keechma/controllers {::proxy-counter
                                      #:keechma.controller {:params true}}}
@@ -2781,7 +2904,8 @@
   (case ev
     :from-c2 (do
                (swap! state* inc)
-               (ctrl/dispatch ctrl ::c-target :from-c1))
+               (ctrl/dispatch ctrl ::c-target :from-c1)
+               (swap! state* inc))
     nil))
 
 (defmethod ctrl/start ::c-broadcast [_ _ _ _]
@@ -2791,7 +2915,8 @@
   (case ev
     :from-c2 (do
                (swap! state* inc)
-               (ctrl/broadcast ctrl :from-c1))
+               (ctrl/broadcast ctrl :from-c1)
+               (swap! state* inc))
     nil))
 
 (defmethod ctrl/start ::c-target [_ _ _ _]
@@ -2819,7 +2944,7 @@
     (is (= {::c-dispatch 1
             ::c-target 1}
            @subscription-call-count*))
-    (is (= {::c-dispatch 1
+    (is (= {::c-dispatch 2
             ::c-target 2}
            (get-derived-state app-instance)))))
 
@@ -2846,11 +2971,11 @@
             ::c-dispatch-proxy 1
             ::c-target 1}
            @subscription-call-count*))
-    (is (= {::c-dispatch 1
+    (is (= {::c-dispatch 2
             ::c-target 2}
            (get-derived-state app-2-instance)))
-    (is (= {::c-dispatch 1
-            ::c-dispatch-proxy 1
+    (is (= {::c-dispatch 2
+            ::c-dispatch-proxy 2
             ::c-target 2}
            @subs*))))
 
@@ -2869,7 +2994,7 @@
     (is (= {::c-broadcast 1
             ::c-target 1}
            @subscription-call-count*))
-    (is (= {::c-broadcast 1
+    (is (= {::c-broadcast 2
             ::c-target 2}
            (get-derived-state app-instance)))))
 
@@ -2897,10 +3022,10 @@
             ::c-broadcast-proxy 1
             ::c-target 1}
            @subscription-call-count*))
-    (is (= {::c-broadcast 1
+    (is (= {::c-broadcast 2
             ::c-target 2}
            (get-derived-state app-2-instance)))
-    (is (= {::c-broadcast 1
-            ::c-broadcast-proxy 1
+    (is (= {::c-broadcast 2
+            ::c-broadcast-proxy 2
             ::c-target 2}
            @subs*))))

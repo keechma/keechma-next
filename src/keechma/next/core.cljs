@@ -14,7 +14,7 @@
 (declare reconcile-initial!)
 
 (def ^:dynamic *transaction-depth* 0)
-(def ^:dynamic *current-app-transaction-depth* {})
+(def ^:dynamic *app-id->transaction-depth* {})
 (def ^:dynamic *stopping* false)
 
 (defn transacting? []
@@ -352,7 +352,7 @@
           (let [app (:keechma.root/parent controller-instance)
                 controller-name (:keechma.controller/proxy controller-instance)
                 app-id (:keechma.app/id app-state)]
-            (binding [*current-app-transaction-depth* (assoc *current-app-transaction-depth* app-id *transaction-depth*)
+            (binding [*app-id->transaction-depth* (assoc *app-id->transaction-depth* app-id *transaction-depth*)
                       *transaction-depth* 0]
               (protocols/-call app controller-name api-fn args)))
           (let [api (:keechma.controller/api controller-instance)]
@@ -378,7 +378,7 @@
                 (:keechma.controller/proxy controller-instance))
            (let [app (:keechma.root/parent controller-instance)
                  controller-name (:keechma.controller/proxy controller-instance)]
-             (binding [*current-app-transaction-depth* (assoc *current-app-transaction-depth* app-id *transaction-depth*)
+             (binding [*app-id->transaction-depth* (assoc *app-id->transaction-depth* app-id *transaction-depth*)
                        *transaction-depth* 0]
                (protocols/-dispatch app controller-name event payload)))
 
@@ -637,7 +637,7 @@
           is-meta-state-identical (identical? meta-state proxied-meta-state)
           is-phase-identical (identical? phase proxied-phase)]
 
-      (binding [*transaction-depth* (get *current-app-transaction-depth* app-id 0)]
+      (binding [*transaction-depth* (get *app-id->transaction-depth* app-id 0)]
 
         (if proxied-controller
           (swap! app-state* update-in [:app-db controller-name] merge {:phase proxied-phase :derived-state proxied-derived-state :meta-state proxied-meta-state})
@@ -658,8 +658,7 @@
               (batched-notify-subscriptions-meta @app-state* #{controller-name}))))))))
 
 (defn on-proxied-controller-dispatch [app-state* subscribed-controllers target-controller-name event payload]
-  (let [{:keys [batcher app-db] :as app-state} @app-state*
-        app-id (:keechma.app/id app-state)
+  (let [{:keys [batcher app-db]} @app-state*
         controller-name (->> subscribed-controllers
                              (select-keys app-db)
                              (filter (fn [[_ controller]] (= :running (:phase controller))))
@@ -667,13 +666,11 @@
     (when controller-name
       (batcher
        (fn []
-         (binding [*transaction-depth* (get *current-app-transaction-depth* app-id 0)]
-           (-dispatch app-state* target-controller-name event payload)
-           (notify-proxied-controllers-apps-on-dispatch app-state* controller-name target-controller-name event payload)))))))
+         (-dispatch app-state* target-controller-name event payload)
+         (notify-proxied-controllers-apps-on-dispatch app-state* controller-name target-controller-name event payload))))))
 
 (defn on-proxied-controller-broadcast [app-state* subscribed-controllers event payload]
-  (let [{:keys [batcher app-db] :as app-state} @app-state*
-        app-id (:keechma.app/id app-state)
+  (let [{:keys [batcher app-db]} @app-state*
         controller-name (->> subscribed-controllers
                              (select-keys app-db)
                              (filter (fn [[_ controller]] (= :running (:phase controller))))
@@ -681,9 +678,8 @@
     (when controller-name
       (batcher
        (fn []
-         (binding [*transaction-depth* (get *current-app-transaction-depth* app-id 0)]
-           (-broadcast app-state* event payload true)
-           (notify-proxied-controllers-apps-on-broadcast app-state* controller-name event payload)))))))
+         (-broadcast app-state* event payload true)
+         (notify-proxied-controllers-apps-on-broadcast app-state* controller-name event payload))))))
 
 (defn controller-start! [app-state* controller-name controller-type params]
   ;; Based on params so far, we're going to try to start the controller. There is one last chance to prevent it

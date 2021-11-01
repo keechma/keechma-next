@@ -50,7 +50,9 @@
       keyword?)
 
 (>def :keechma.controller/proxy
-      (s/and keyword? #(isa? % :keechma/controller)))
+      (s/or
+       :keyword keyword?
+       :identity :keechma.controller.name/identity))
 
 (>def :keechma.controller.name/identity
       (s/tuple keyword? (complement nil?)))
