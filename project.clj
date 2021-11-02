@@ -4,6 +4,6 @@
   :license {:name "MIT License"
             :url "https://opensource.org/licenses/MIT"}
   :source-paths ["src"]
-  :dependencies [[com.stuartsierra/dependency "1.0.0"]
+  :dependencies [[weavejester/dependency "0.2.1"]
                  [medley "1.3.0"]
-                 [com.fulcrologic/guardrails "1.1.3"]])
+                 [com.fulcrologic/guardrails "1.1.5"]])
