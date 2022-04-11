@@ -316,7 +316,8 @@
     :keechma/is-transacting
     :keechma.app/should-run?
     :keechma.app/deps
-    :keechma.app/variant})
+    :keechma.app/variant
+    :keechma/trace})
 
 (defn dissoc-keechma-keys [app]
   (apply dissoc app keechma-keys-to-dissoc))
@@ -565,7 +566,8 @@
                               (-get-api* [_ controller-name]
                                 (-get-api* app-state* controller-name))
                               (-transact [_ transaction]
-                                (-transact app-state* transaction))
+                                (with-tracing app-state*
+                                  (-transact app-state* transaction)))
                               (-get-id [_]
                                 (:keechma.app/id @app-state*)))
                :meta-state* meta-state*
@@ -1173,10 +1175,11 @@
               :payload payload})
      (protocols/-broadcast app-instance event payload))))
 
-(def transact
-  ^{:doc      "Runs the transaction fn inside the transact block."
-    :arglists '([app-instance transaction])}
-  (make-app-proxy protocols/-transact))
+(defn transact
+  "Runs the transaction fn inside the transact block."
+  [app-instance transaction]
+  (with-tracing (protocols/-get-app-state* app-instance)
+    (protocols/-transact app-instance transaction)))
 
 (def subscribe
   ^{:doc      "Subscribes to the controller's state. Subscription fn will be called whenever the controller's state changes."

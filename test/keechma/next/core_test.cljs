@@ -73,7 +73,7 @@
              :payload {:keechma/controller :keechma.next.core-test/counter-1,
                        :meta-state/prev nil,
                        :meta-state/next nil}}]
-           @trace*))
+           (:log @trace*)))
     (dispatch app-instance ::counter-1 :inc)
     (is (= {::counter-1 1} (get-derived-state app-instance)))
     (is (= 1 (get-derived-state app-instance ::counter-1)))
@@ -90,7 +90,7 @@
                         :state.derived/prev 0,
                         :state.derived/next 1,
                         :state/next 1}}]
-            @trace*))
+            (:log @trace*)))
     (stop! app-instance)))
 
 (deftest dispatch-2
@@ -138,7 +138,7 @@
              {:keechma/controller :keechma.next.core-test/counter-2,
               :meta-state/prev nil,
               :meta-state/next nil}}]
-           @trace*))
+           (:log @trace*)))
     (dispatch app-instance ::counter-1 :inc)
     (is (= {::counter-1 1 ::counter-2 2} (get-derived-state app-instance)))
     (is (= [{:type :keechma/dispatch,
@@ -163,7 +163,7 @@
               :state.derived/prev 1,
               :state.derived/next 2,
               :state/next 2}}]
-           @trace*))
+           (:log @trace*)))
     (stop! app-instance)
     (is (= [[::counter-1 :keechma.lifecycle/start]
             [::counter-1 :keechma.on/start]
