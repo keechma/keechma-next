@@ -963,10 +963,10 @@
   (let [app-state @app-state*
         app-ctx   (get-in app-state (get-app-store-path path))]
     (when app-ctx
+      (trace! :keechma.app/stop {:keechma/app path})
       (let [apps         (:apps app-ctx)
             to-reconcile (reverse (get-sorted-controllers-for-app app-state path))]
         (doseq [[app-name _] apps]
-          (trace! :keechma.app/stop {:keechma/app app-name})
           (stop-app! app-state* (conj path app-name)))
         (doseq [controller-name to-reconcile]
           (when (get-controller-instance @app-state* controller-name)
@@ -996,7 +996,6 @@
            apps-definitions)]
 
       (doseq [app-name (get apps-by-should-run false)]
-        (trace! :keechma.app/stop {:keechma/app app-name})
         (stop-app! app-state* (conj path app-name)))
 
       (doseq [app-name (get apps-by-should-run true)]
@@ -1006,7 +1005,7 @@
           (if (:is-running child-app-ctx)
             (reconcile-app! app-state* path (set/union dirty (get-in app-state [:transaction :dirty]) (set to-reconcile)))
             (do
-              (trace! :keechma.app/start {:keechma/app app-name})
+              (trace! :keechma.app/start {:keechma/app path})
               (swap! app-state* register-app (make-ctx (get apps-definitions app-name) (merge app-ctx {:path path :is-running true})))
               (reconcile-initial! app-state* path))))))))
 
