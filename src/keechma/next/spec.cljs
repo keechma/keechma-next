@@ -132,10 +132,12 @@
       (s/and (s/map-of #(or (keyword? %) (vector? %)) map?)
              (s/coll-of :keechma/controller :into {})))
 
+(>def :keechma/trace fn?)
+
 (>def :keechma/app
       (s/keys
        :req [:keechma/controllers]
-       :opt [:keechma/apps :keechma.root/parent]))
+       :opt [:keechma/apps :keechma.root/parent :keechma/trace]))
 
 (>def :keechma/nested-app
       (s/and
