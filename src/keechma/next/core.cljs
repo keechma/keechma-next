@@ -5,6 +5,7 @@
    [keechma.next.util :refer [get-dirty-deps get-lowest-common-ancestor-for-paths]]
    [keechma.next.protocols :as protocols :refer [IAppInstance IRootAppInstance]]
    [keechma.next.conformer :refer [conform conform-factory-produced]]
+   [keechma.next.tracing :refer [trace! with-tracing]]
    [medley.core :refer [dissoc-in]]
    [weavejester.dependency :as dep]
    [clojure.set :as set]))
@@ -315,7 +316,8 @@
     :keechma/is-transacting
     :keechma.app/should-run?
     :keechma.app/deps
-    :keechma.app/variant})
+    :keechma.app/variant
+    :keechma/trace})
 
 (defn dissoc-keechma-keys [app]
   (apply dissoc app keechma-keys-to-dissoc))
@@ -495,23 +497,45 @@
                               (-dispatch [_ target-controller-name event]
                                 (batcher
                                  (fn []
-                                   (-dispatch app-state* target-controller-name event nil)
-                                   (notify-proxied-controllers-apps-on-dispatch app-state* controller-name target-controller-name event nil))))
+                                   (with-tracing app-state*
+                                     (trace! :keechma.controller/dispatch
+                                             {:keechma/controller target-controller-name
+                                              :keechma.controller/source controller-name
+                                              :event event
+                                              :payload nil})
+                                     (-dispatch app-state* target-controller-name event nil)
+                                     (notify-proxied-controllers-apps-on-dispatch app-state* controller-name target-controller-name event nil)))))
                               (-dispatch [_ target-controller-name event payload]
                                 (batcher
                                  (fn []
-                                   (-dispatch app-state* target-controller-name event payload)
-                                   (notify-proxied-controllers-apps-on-dispatch app-state* controller-name target-controller-name event payload))))
+                                   (with-tracing app-state*
+                                     (trace! :keechma.controller/dispatch
+                                             {:keechma/controller target-controller-name
+                                              :keechma.controller/source controller-name
+                                              :event event
+                                              :payload payload})
+                                     (-dispatch app-state* target-controller-name event payload)
+                                     (notify-proxied-controllers-apps-on-dispatch app-state* controller-name target-controller-name event payload)))))
                               (-broadcast [_ event]
                                 (batcher
                                  (fn []
-                                   (-broadcast app-state* event nil)
-                                   (notify-proxied-controllers-apps-on-broadcast app-state* controller-name event nil))))
+                                   (with-tracing app-state*
+                                     (trace! :keechma.controller/broadcast
+                                             {:keechma.controller/source controller-name
+                                              :event event
+                                              :payload nil})
+                                     (-broadcast app-state* event nil)
+                                     (notify-proxied-controllers-apps-on-broadcast app-state* controller-name event nil)))))
                               (-broadcast [_ event payload]
                                 (batcher
                                  (fn []
-                                   (-broadcast app-state* event payload)
-                                   (notify-proxied-controllers-apps-on-broadcast app-state* controller-name event payload))))
+                                   (with-tracing app-state*
+                                     (trace! :keechma.controller/broadcast
+                                             {:keechma.controller/source controller-name
+                                              :event event
+                                              :payload payload})
+                                     (-broadcast app-state* event payload)
+                                     (notify-proxied-controllers-apps-on-broadcast app-state* controller-name event payload)))))
                               (-call [_ target-controller-name api-fn args]
                                 (let [controller-running-deps-map (get-controller-running-deps-map @app-state* controller-name)
                                       deps-name->renamed (set/map-invert controller-running-deps-map)
@@ -519,18 +543,31 @@
                                   (if (not real-target-controller-name)
                                     (let [controller (get-in @app-state* [:controllers target-controller-name])]
                                       (if (:keechma.controller/is-global controller)
-                                        (apply -call app-state* target-controller-name api-fn args)
+                                        (with-tracing app-state*
+                                          (trace! :keechma.controller/call
+                                                  {:keechma.controller/source controller-name
+                                                   :keechma/controller target-controller-name
+                                                   :fn api-fn
+                                                   :args args})
+                                          (apply -call app-state* target-controller-name api-fn args))
                                         (throw (keechma-ex-info
                                                 "Attempted to call an API function on non-existing dep"
                                                 :keechma.controller.deps/missing
                                                 {:keechma.controller.api/fn api-fn
                                                  :keechma.controller.api/args args
                                                  :keechma.controller/dep target-controller-name}))))
-                                    (apply -call app-state* real-target-controller-name api-fn args))))
+                                    (with-tracing app-state*
+                                      (trace! :keechma.controller/call
+                                              {:keechma.controller/source controller-name
+                                               :keechma/controller real-target-controller-name
+                                               :fn api-fn
+                                               :args args})
+                                      (apply -call app-state* real-target-controller-name api-fn args)))))
                               (-get-api* [_ controller-name]
                                 (-get-api* app-state* controller-name))
                               (-transact [_ transaction]
-                                (-transact app-state* transaction))
+                                (with-tracing app-state*
+                                  (-transact app-state* transaction)))
                               (-get-id [_]
                                 (:keechma.app/id @app-state*)))
                :meta-state* meta-state*
@@ -585,17 +622,26 @@
         instance   (:instance controller)
         state      (deref (:state* instance))
         deps-state (get-controller-derived-deps-state app-state controller-name)
+        new-derived-state (ctrl/derive-state instance state deps-state)
         new-app-db
         (-> app-db
             (dissoc-in [controller-name :events-buffer])
             (assoc-in [controller-name :state] state)
-            (assoc-in [controller-name :derived-state]
-                      (ctrl/derive-state instance state deps-state)))]
+            (assoc-in [controller-name :derived-state] new-derived-state))]
+    (trace! :keechma.controller/state*
+            {:keechma/controller controller-name
+             :state.derived/prev (get-in app-state [:app-db controller-name :state])
+             :state.derived/next new-derived-state
+             :state/next state})
     (swap! app-state* assoc :app-db new-app-db)))
 
 (defn sync-controller-meta->app-db! [app-state* controller-name]
   (let [app-state   @app-state*
         meta-state* (get-in app-state [:app-db controller-name :instance :meta-state*])]
+    (trace! :keechma.controller/meta-state*
+            {:keechma/controller controller-name
+             :meta-state/prev (get-in app-state [:app-db controller-name :meta-state])
+             :meta-state/next @meta-state*})
     (swap! app-state* assoc-in [:app-db controller-name :meta-state] @meta-state*)))
 
 (defn transaction-mark-dirty! [app-state* controller-name]
@@ -608,24 +654,26 @@
   (swap! app-state* update-in [:transaction :dirty-meta] conj controller-name))
 
 (defn on-controller-state-change! [app-state* controller-name]
-  (when-not *stopping*
-    (sync-controller->app-db! app-state* controller-name)
-    (if (transacting?)
-      (transaction-mark-dirty! app-state* controller-name)
-      (do
-        (when ^boolean goog.DEBUG
-          (js/console.warn "Controller state updated outside transact block. Controller:" (str controller-name)))
+  (with-tracing app-state*
+    (when-not *stopping*
+      (sync-controller->app-db! app-state* controller-name)
+      (if (transacting?)
         (transaction-mark-dirty! app-state* controller-name)
-        (reconcile-after-transaction! app-state*)))))
+        (do
+          (when ^boolean goog.DEBUG
+            (js/console.warn "Controller state updated outside transact block. Controller:" (str controller-name)))
+          (transaction-mark-dirty! app-state* controller-name)
+          (reconcile-after-transaction! app-state*))))))
 
 (defn on-controller-meta-state-change! [app-state* controller-name]
-  (when-not *stopping*
-    (sync-controller-meta->app-db! app-state* controller-name)
-    (if (transacting?)
-      (transaction-mark-dirty-meta! app-state* controller-name)
-      (do
-        (notify-fences @app-state*)
-        (batched-notify-subscriptions-meta @app-state* #{controller-name})))))
+  (with-tracing app-state*
+    (when-not *stopping*
+      (sync-controller-meta->app-db! app-state* controller-name)
+      (if (transacting?)
+        (transaction-mark-dirty-meta! app-state* controller-name)
+        (do
+          (notify-fences @app-state*)
+          (batched-notify-subscriptions-meta @app-state* #{controller-name}))))))
 
 (defn get-proxied-controller [app-state controller-name]
   (let [controller-instance (get-in app-state [:app-db controller-name :instance])
@@ -714,6 +762,10 @@
                 state       (ctrl/start instance params deps-state prev-state)]
             (reset! state* state)
             (swap! app-state* update-in [:app-db controller-name] #(merge % {:state state :phase :starting :prev-deps-state deps-state}))
+            (trace! :keechma.on/start
+                    {:keechma/controller controller-name
+                     :event :keechma.on/start
+                     :payload params})
             (-dispatch app-state* controller-name :keechma.on/start params)
             (swap! app-state* assoc-in [:app-db controller-name :phase] :running)
             (doseq [[event payload] (get-in @app-state* [:app-db controller-name :events-buffer])]
@@ -737,6 +789,10 @@
         (swap! app-state* assoc-in [:app-db controller-name :phase] :stopping)
         (remove-watch state* :keechma/app)
         (remove-watch (:meta-state* instance) :keechma/app)
+        (trace! :keechma.on/stop
+                {:keechma/controller controller-name
+                 :event :keechma.on/stop
+                 :payload nil})
         (-dispatch app-state* controller-name :keechma.on/stop nil)
         (let [deps-state (get-controller-derived-deps-state @app-state* controller-name)
               state      (ctrl/stop instance params @state* deps-state)]
@@ -751,6 +807,10 @@
         instance        (get-in app-state [:app-db controller-name :instance])
         dirty-deps      (get-dirty-deps prev-deps-state deps-state)]
     (when dirty-deps
+      (trace! :keechma.on/deps-change
+              {:keechma/controller controller-name
+               :event :keechma.on/deps-change
+               :payload dirty-deps})
       (swap! app-state* assoc-in [:app-db controller-name :prev-deps-state] deps-state)
       (-dispatch app-state* controller-name :keechma.on/deps-change dirty-deps)
       (let [state         (-> instance :state* deref)
@@ -906,6 +966,7 @@
       (let [apps         (:apps app-ctx)
             to-reconcile (reverse (get-sorted-controllers-for-app app-state path))]
         (doseq [[app-name _] apps]
+          (trace! :keechma.app/stop {:keechma/app app-name})
           (stop-app! app-state* (conj path app-name)))
         (doseq [controller-name to-reconcile]
           (when (get-controller-instance @app-state* controller-name)
@@ -935,6 +996,7 @@
            apps-definitions)]
 
       (doseq [app-name (get apps-by-should-run false)]
+        (trace! :keechma.app/stop {:keechma/app app-name})
         (stop-app! app-state* (conj path app-name)))
 
       (doseq [app-name (get apps-by-should-run true)]
@@ -944,6 +1006,7 @@
           (if (:is-running child-app-ctx)
             (reconcile-app! app-state* path (set/union dirty (get-in app-state [:transaction :dirty]) (set to-reconcile)))
             (do
+              (trace! :keechma.app/start {:keechma/app app-name})
               (swap! app-state* register-app (make-ctx (get apps-definitions app-name) (merge app-ctx {:path path :is-running true})))
               (reconcile-initial! app-state* path))))))))
 
@@ -1002,21 +1065,26 @@
                       parent-app (assoc :keechma.root/parent parent-app)
                       true conform)
          app-id     (str (gensym 'app-id))
-         parent-app-batcher (when parent-app
-                              (-> parent-app
-                                  protocols/-get-app-state*
-                                  deref
-                                  :batcher))
+         parent-app-state (when parent-app
+                            (-> parent-app
+                                protocols/-get-app-state*
+                                deref))
+         parent-app-batcher (:batcher parent-app-state)
+         parent-app-trace (:keechma/trace parent-app)
          batcher    (or (:keechma.subscriptions/batcher app') parent-app-batcher default-batcher)
+         trace (or (:keechma/trace app') parent-app-trace)
          ctx        (make-ctx app' {:path [] :is-running true})
          app-state* (atom (-> {:batcher           batcher
                                :keechma.app/state ::running
                                :keechma.app/id    app-id
+                               :keechma/trace     trace
                                :keechma.app.reconciliation/generation 0}
                               (assoc-empty-transaction)
                               (register-app ctx)))]
 
-     (reconcile-initial! app-state* [])
+     (with-tracing app-state*
+       (trace! :keechma.app/start nil)
+       (reconcile-initial! app-state* []))
 
      (reify
        IAppInstance
@@ -1084,20 +1152,34 @@
     :arglists '([app-instance])}
   (make-app-proxy protocols/-stop!))
 
-(def dispatch
-  ^{:doc      "Dispatches an event to a controller."
-    :arglists '([app-instance controller-name event] [app-instance controller-name event payload])}
-  (make-app-proxy protocols/-dispatch))
+(defn dispatch
+  "Dispatches an event to a controller."
+  ([app-instance controller-name event]
+   (dispatch app-instance controller-name event nil))
+  ([app-instance controller-name event payload]
+   (with-tracing (protocols/-get-app-state* app-instance)
+     (trace! :keechma/dispatch
+             {:keechma/controller controller-name
+              :event event
+              :payload payload})
+     (protocols/-dispatch app-instance controller-name event payload))))
 
-(def broadcast
-  ^{:doc      "Broadcasts an event to all running controllers."
-    :arglists '([app-instance event] [app-instance event payload])}
-  (make-app-proxy protocols/-broadcast))
+(defn broadcast
+  "Broadcasts an event to all running-controllers"
+  ([app-instance event]
+   (broadcast app-instance event nil))
+  ([app-instance event payload]
+   (with-tracing (protocols/-get-app-state* app-instance)
+     (trace! :keechma/broadcast
+             {:event event
+              :payload payload})
+     (protocols/-broadcast app-instance event payload))))
 
-(def transact
-  ^{:doc      "Runs the transaction fn inside the transact block."
-    :arglists '([app-instance transaction])}
-  (make-app-proxy protocols/-transact))
+(defn transact
+  "Runs the transaction fn inside the transact block."
+  [app-instance transaction]
+  (with-tracing (protocols/-get-app-state* app-instance)
+    (protocols/-transact app-instance transaction)))
 
 (def subscribe
   ^{:doc      "Subscribes to the controller's state. Subscription fn will be called whenever the controller's state changes."
@@ -1141,8 +1223,13 @@
 
 (defn call
   "Calls an API fn on the controller's exposed API object."
-  [app controller-name api-fn & args]
-  (protocols/-call app controller-name api-fn args))
+  [app-instance controller-name api-fn & args]
+  (with-tracing (protocols/-get-app-state* app-instance)
+    (trace! :keechma/call
+            {:keechma/controller controller-name
+             :fn api-fn
+             :args args})
+    (protocols/-call app-instance controller-name api-fn args)))
 
 (defn get-running-controllers
   "Returns a map of running controllers. Useful for debugging."

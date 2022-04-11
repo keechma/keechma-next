@@ -5,7 +5,6 @@
    [keechma.next.core :refer [start! stop! subscribe subscribe-meta dispatch broadcast call get-derived-state get-meta-state transact get-app-state*]]
    [keechma.next.fence :refer [make-fence]]
    [keechma.next.conformer :refer [conform]]
-   [keechma.next.event :as event]
    [cljs.spec.alpha :as s]))
 
 #_(use-fixtures :once {:before (fn [] (js/console.clear))})
@@ -52,11 +51,29 @@
 
 (deftest dispatch-1
   (let [cmd-log* (atom [])
+        trace* (atom nil)
         app {:keechma/controllers {::counter-1 {:keechma.controller/params true
-                                                :cmd-log* cmd-log*}}}
+                                                :cmd-log* cmd-log*}}
+             :keechma/trace (fn [res]
+                              (reset! trace* res))}
         app-instance (start! app)]
     (is (= {::counter-1 0} (get-derived-state app-instance)))
     (is (= 0 (get-derived-state app-instance ::counter-1)))
+    (is (= [{:type :keechma.app/start, :payload nil}
+            {:type :keechma.on/start,
+             :payload {:keechma/controller :keechma.next.core-test/counter-1,
+                       :event :keechma.on/start,
+                       :payload true}}
+            {:type :keechma.controller/state*,
+             :payload {:keechma/controller :keechma.next.core-test/counter-1,
+                       :state.derived/prev 0,
+                       :state.derived/next 0,
+                       :state/next 0}}
+            {:type :keechma.controller/meta-state*,
+             :payload {:keechma/controller :keechma.next.core-test/counter-1,
+                       :meta-state/prev nil,
+                       :meta-state/next nil}}]
+           (:log @trace*)))
     (dispatch app-instance ::counter-1 :inc)
     (is (= {::counter-1 1} (get-derived-state app-instance)))
     (is (= 1 (get-derived-state app-instance ::counter-1)))
@@ -64,19 +81,89 @@
             [::counter-1 :keechma.on/start]
             [::counter-1 :inc]]
            @cmd-log*))
+    (is (=  [{:type :keechma/dispatch,
+              :payload {:keechma/controller :keechma.next.core-test/counter-1,
+                        :event :inc,
+                        :payload nil}}
+             {:type :keechma.controller/state*,
+              :payload {:keechma/controller :keechma.next.core-test/counter-1,
+                        :state.derived/prev 0,
+                        :state.derived/next 1,
+                        :state/next 1}}]
+            (:log @trace*)))
     (stop! app-instance)))
 
 (deftest dispatch-2
   (let [cmd-log* (atom [])
+        trace* (atom nil)
         app {:keechma/controllers {::counter-1 {:keechma.controller/params true
                                                 :cmd-log* cmd-log*}
                                    ::counter-2 {:keechma.controller/params true
                                                 :cmd-log* cmd-log*
-                                                :keechma.controller/deps [::counter-1]}}}
+                                                :keechma.controller/deps [::counter-1]}}
+             :keechma/trace (fn [res]
+                              (reset! trace* res))}
         app-instance (start! app)]
     (is (= {::counter-1 0 ::counter-2 1} (get-derived-state app-instance)))
+    (is (= [{:type :keechma.app/start, :payload nil}
+            {:type :keechma.on/start,
+             :payload
+             {:keechma/controller :keechma.next.core-test/counter-1,
+              :event :keechma.on/start,
+              :payload true}}
+            {:type :keechma.controller/state*,
+             :payload
+             {:keechma/controller :keechma.next.core-test/counter-1,
+              :state.derived/prev 0,
+              :state.derived/next 0,
+              :state/next 0}}
+            {:type :keechma.controller/meta-state*,
+             :payload
+             {:keechma/controller :keechma.next.core-test/counter-1,
+              :meta-state/prev nil,
+              :meta-state/next nil}}
+            {:type :keechma.on/start,
+             :payload
+             {:keechma/controller :keechma.next.core-test/counter-2,
+              :event :keechma.on/start,
+              :payload true}}
+            {:type :keechma.controller/state*,
+             :payload
+             {:keechma/controller :keechma.next.core-test/counter-2,
+              :state.derived/prev 1,
+              :state.derived/next 1,
+              :state/next 1}}
+            {:type :keechma.controller/meta-state*,
+             :payload
+             {:keechma/controller :keechma.next.core-test/counter-2,
+              :meta-state/prev nil,
+              :meta-state/next nil}}]
+           (:log @trace*)))
     (dispatch app-instance ::counter-1 :inc)
     (is (= {::counter-1 1 ::counter-2 2} (get-derived-state app-instance)))
+    (is (= [{:type :keechma/dispatch,
+             :payload
+             {:keechma/controller :keechma.next.core-test/counter-1,
+              :event :inc,
+              :payload nil}}
+            {:type :keechma.controller/state*,
+             :payload
+             {:keechma/controller :keechma.next.core-test/counter-1,
+              :state.derived/prev 0,
+              :state.derived/next 1,
+              :state/next 1}}
+            {:type :keechma.on/deps-change,
+             :payload
+             {:keechma/controller :keechma.next.core-test/counter-2,
+              :event :keechma.on/deps-change,
+              :payload {:keechma.next.core-test/counter-1 1}}}
+            {:type :keechma.controller/state*,
+             :payload
+             {:keechma/controller :keechma.next.core-test/counter-2,
+              :state.derived/prev 1,
+              :state.derived/next 2,
+              :state/next 2}}]
+           (:log @trace*)))
     (stop! app-instance)
     (is (= [[::counter-1 :keechma.lifecycle/start]
             [::counter-1 :keechma.on/start]
