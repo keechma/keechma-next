@@ -29,8 +29,9 @@
   (trigger [this ctrl]
     (trigger this ctrl nil))
   (trigger [_ ctrl payload]
-    (doseq [event events]
-      (trigger event ctrl payload))))
+    (ctrl/transact ctrl (fn []
+                          (doseq [event events]
+                            (trigger event ctrl payload))))))
 
 (defn to-dispatch
   ([controller-name event]
