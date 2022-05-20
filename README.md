@@ -218,18 +218,17 @@ In all these examples, controllers' params were set to `true`. Controller's para
 
  If you compare the `:counter-2` controller implementation, it is identical to the previous examples. But, in this case we've passed a function as the controller's params. This function will be called whenever any parent state is changed. If that function returns true, controller will be started, otherwise stopped. You can notice that after second `:inc` dispatch, `:counter-2`	key is not present in the derived state map. This is because the controller is not running at that moment (`:counter` value is `1`, so params function returned false). If the params function returned truthy value on previous call, and returns a truthy value again, these values will be compared. If they are different controller will be restarted (stopped and started again). This behavior drastically simplifes your code, because you don't have to handle cases like these in your own code. Params function determines the life time of a controller. 
  
-| Prev Type == Current Type | Prev Params | Current Params | Prev Params == Current Params | Actions                                           |
-|---------------------------|-------------|----------------|-------|---------------------------------------------------------------------------|
-| falsy                     | falsy       | falsy          | -     | Do nothing (controller is in :stopped state)                              |
-| falsy                     | truthy      | falsy          | -     | Stop the current controller instance                                      |
-| falsy                     | falsy       | truthy         | -     | Start a new controller instance                                           |
-| falsy                     | truthy      | truthy         | -     | Stop the current controller instance and start a new one                  |
-| truthy                    | falsy       | falsy          | -     | Do nothing (controller is in :stopped state)                              |
-| truthy                    | truthy      | falsy          | -     | Stop the current controller instance                                      |
-| truthy                    | falsy       | truthy         | -     | Start a new controller instance                                           |
-| truthy                    | truthy      | truthy         | false | Stop the current controller instance and start a new one                  |
-| truthy                    | truthy      | truthy         | true  | Dispatch :keechma.on/deps-change event to the running controller instance |
 
+| Prev Params | Current Params | Prev == Current | Actions                                                                   |
+|-------------|----------------|-----------------|---------------------------------------------------------------------------|
+| falsy       | falsy          | -               | Do nothing (controller is in :stopped state)                              |
+| truthy      | falsy          | -               | Stop the current controller instance                                      |
+| falsy       | truthy         | -               | Start a new controller instance                                           |
+| truthy      | truthy         | false           | Stop the current controller instance and start a new one                  |
+| truthy      | truthy         | true            | Dispatch :keechma.on/deps-change event to the running controller instance |
+
+
+There also exists the ability to change a controller type between reconcilliation cycles which can also affect their lifecycle, for more information refer to this [expanded table](https://github.com/keechma/keechma-next/blob/6560d5f87e6a731e9fff7dc0c52e6da571155f72/src/keechma/next/core.cljs#L866).
 
 ### Controller variants
 
